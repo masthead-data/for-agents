@@ -14,8 +14,7 @@ Agent Skills are folders of instructions and resources that agents discover and 
 
 ## Prerequisites
 
-- A [Masthead Data](https://mastheadata.com) account
-- BigQuery access with `INFORMATION_SCHEMA` read permissions
+- A Masthead Data account with access to the Masthead shared BigQuery dataset
 
 ---
 
