@@ -1,0 +1,10 @@
+{
+  "name": "masthead-data-skills",
+  "description": "Masthead Data Agent Skills for BigQuery Data Observability and Cost Optimization",
+  "version": "1.0.0",
+  "author": {
+    "name": "Masthead Data"
+  },
+  "mcpServers": {},
+  "repository": "https://github.com/masthead-data/for-agents"
+}

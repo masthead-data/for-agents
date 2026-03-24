@@ -1,0 +1,17 @@
+{
+  "name": "masthead-data",
+  "owner": {
+    "name": "Masthead Data",
+    "email": "contact@mastheadata.com"
+  },
+  "plugins": [
+    {
+      "name": "masthead-data-skills",
+      "source": "./",
+      "description": "Masthead Data Agent Skills for BigQuery Data Observability and Cost Optimization",
+      "author": {
+        "name": "Masthead Data"
+      }
+    }
+  ]
+}
