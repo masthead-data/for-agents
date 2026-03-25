@@ -120,7 +120,7 @@ ORDER BY CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) DESC" > compute_ass
 #### Dataform
 
 - Open `definitions/_reservations.js`.
-- The `action_name` values in the CSV map directly to Dataform action IDs (e.g. `httparchive.crawl.pages`) as used in the `actions` arrays of `_reservations.js`.
+- The `action_name` values in the CSV map directly to Dataform action IDs (e.g. `project.dataset.table`) as used in the `actions` arrays of `_reservations.js`.
 - Replace `on_demand` `actions` with all rows where `recommended_model = 'ON-DEMAND'`.
 - Replace reserved reservation `actions` with all rows where `recommended_model != 'ON-DEMAND'`.
 - Remove duplicates; keep only actions present in this repo's Dataform graph.

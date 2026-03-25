@@ -18,14 +18,15 @@ Identify and remove BigQuery tables that contribute to storage costs but have no
 
 Masthead Data uses lineage analysis to identify tables, but relies on visible pipeline references. Modification timestamps are critical:
 
-| Type         | Definition                                   | Indicators                         | Watch for                                                                                                     |
-| ------------ | -------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Dead-end** | Regularly updated, no downstream consumption | Updated but never read in 30+ days | External writers outside lineage graph (manual jobs, independent pipelines)                                   |
-| **Unused**   | No upstream or downstream activity           | No reads/writes in 30+ days        | Recent `lastModifiedTime` despite "Unused" flag suggests external writer—**do not drop without verification** |
+| Type              | Definition                                                                                        | Indicators                         | Watch for                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Leaf dead-end** | Leaf table in a dead-end chain — regularly updated, no downstream consumers. Directly actionable. | Updated but never read in 30+ days | External writers outside lineage graph (manual jobs, independent pipelines)                                                       |
+| **Dead-end**      | Upstream table or pipeline that contributes solely to a dead-end chain                            | Feeds only into dead-end tables    | May become resolvable once the leaf dead-end is dropped; re-evaluate after leaf removal                                           |
+| **Unused**        | No upstream or downstream activity                                                                | No reads/writes in 30+ days        | Recent `last_modified_time` (in query output) despite "Unused" flag suggests external writer—**do not drop without verification** |
 
 ### Key Signal
 
-If a table is flagged `Unused` **and** has a recent modification timestamp, something outside Masthead's visibility is writing to it. This always warrants investigation before dropping.
+If a table is flagged `Unused` **and** has a recent `last_modified_time` in the query output (i.e. the actual BigQuery table was recently written to), something outside Masthead's lineage visibility is writing to it — for example a manual job or external pipeline. `last_modified_time` here is the **referenced table's** BigQuery metadata timestamp, not the insights record update time. This always warrants investigation before dropping.
 
 ## When to Use
 
@@ -36,6 +37,20 @@ If a table is flagged `Unused` **and** has a recent modification timestamp, some
 
 ## Implementation Steps
 
+### Step 0: Configure Masthead Dataset
+
+1. Ask the user for the BigQuery dataset where Masthead insights are stored. This dataset must contain an `insights` table with the same schema as `masthead-prod.YOUR_DATASET.insights`. If the user does not have access, direct them to [request access](https://docs.mastheadata.com/api#get-access-to-bigquery-resources).
+
+   Once provided, **immediately persist it** by appending to the project-level agent instructions file (e.g. `AGENTS.md`, `.github/copilot-instructions.md` — whichever already exists in the project root, or create `AGENTS.md` if none exist). Append inside `<!-- masthead -->` fences so existing content is not disturbed:
+
+   ```
+   <!-- masthead -->
+   MASTHEAD_DATASET=YOUR_DATASET
+   <!-- /masthead -->
+   ```
+
+   On subsequent runs, read this value from the instructions file instead of prompting the user again.
+
 ### Step 1: Query Storage Waste
 
 ```bash
@@ -44,19 +59,19 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
   subtype,
   project_id,
   target_resource,
-  SAFE.STRING(operations[0].resource_type) AS resource_type,
+  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.resource_type') AS resource_type,
   SAFE.INT64(overview.num_bytes) / POW(1024, 4) AS total_tib,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
-  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d
+  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
+  SAFE.TIMESTAMP(overview.last_modified_time) AS last_modified_time
 FROM \`masthead-prod.YOUR_DATASET.insights\`
 WHERE category = 'Cost'
-  AND subtype IN ('Dead end table', 'Unused table')
+  AND subtype IN ('Dead end table', 'Leaf dead end table', 'Unused table')
   AND overview.num_bytes IS NOT NULL
-  AND SAFE.FLOAT64(overview.savings_30d) > 1
 ORDER BY savings_usd_30d DESC" > storage_waste.csv
 ```
 
-**Note:** Sorting by `savings_usd_30d` instead of `total_tib` prioritizes high-impact targets for review.
+**Note:** `cost_30d` and `savings_30d` may be null — `total_tib` is the reliable sizing signal. Include `last_modified_time` to detect external writers (see Key Signal above).
 
 ### Step 2: Review and Decide
 
@@ -78,8 +93,9 @@ Review `storage_waste.csv` and add a `status` column with values:
 
 ```bash
 # Generate DROP statements
+# Column 3 in storage_waste.csv is target_resource (project.dataset.table)
 awk -F',' '$NF=="to drop" {
-  print "bq rm -f -t " $4
+  print "bq rm -f -t " $3
 }' storage_waste.csv > drop_tables.sh
 
 # Review generated commands
@@ -93,7 +109,7 @@ bash drop_tables.sh
 
 ```bash
 # Add --dry-run flag to each command
-# To be run in only by users!
+# To be run by users only!
 sed 's/bq rm/bq rm --dry-run/' drop_tables.sh > drop_tables_dryrun.sh
 bash drop_tables_dryrun.sh
 ```
