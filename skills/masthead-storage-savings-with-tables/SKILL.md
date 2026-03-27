@@ -1,5 +1,5 @@
 ---
-name: optimize-storage-costs
+name: masthead-storage-savings-with-tables
 description: Optimize BigQuery storage costs by identifying and removing dead-end and unused tables.
 compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only permissions to run BigQuery jobs, access data, and view reservations.
 ---

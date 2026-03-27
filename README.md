@@ -36,7 +36,7 @@ Use the [Vercel Skills CLI](https://github.com/vercel-labs/skills) to install sk
 npx skills add masthead-data/for-agents --global
 
 # Install a specific skill
-npx skills add masthead-data/for-agents --skill optimize-storage-costs
+npx skills add masthead-data/for-agents --skill masthead-storage-savings-with-tables
 ```
 
 Once installed, ask your agent naturally:
@@ -47,15 +47,20 @@ Optimize my BigQuery storage costs using Masthead insights
 
 ## Available Skills
 
-### `optimize-data-model-compute`
+### `masthead-compute-savings-with-data-models`
 Optimize BigQuery compute costs by assigning Dataform, dbt, or Airflow models to slot reservations or on-demand compute.
 
 **What you get:** updated reservation assignment config for your orchestration tool (Dataform, dbt or Airflow), verified against live Masthead recommendations.
 
-### `optimize-storage-costs`
+### `masthead-storage-savings-with-tables`
 Optimize BigQuery storage costs by identifying and removing dead-end and unused tables.
 
 **What you get:** a reviewed CSV of waste candidates ranked by savings impact, and a ready-to-run shell script to drop approved tables.
+
+### `masthead-storage-savings-with-datasets`
+Optimize BigQuery storage costs at the dataset level by switching storage billing models and setting expiration policies.
+
+**What you get:** a prioritized list of datasets eligible for billing model changes or expiration policies, and ready-to-run commands to apply them.
 
 ---
 

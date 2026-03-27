@@ -1,5 +1,5 @@
 ---
-name: optimize-data-model-compute
+name: masthead-compute-savings-with-data-models
 description: Optimize BigQuery compute costs by assigning data models (Dataform, dbt, Airflow) to slot reservations or on-demand compute based on Masthead recommendations.
 compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only permissions to run BigQuery jobs, access data, and view reservations.
 ---
