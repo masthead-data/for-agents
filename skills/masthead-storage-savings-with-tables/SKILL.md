@@ -63,12 +63,12 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
   SAFE.INT64(overview.num_bytes) / POW(1024, 4) AS total_tib,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
   SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  SAFE.TIMESTAMP(overview.last_modified_time) AS last_modified_time
+  SAFE.TIMESTAMP(JSON_VALUE(overview, '$.last_modified_time')) AS last_modified_time
 FROM \`masthead-prod.YOUR_DATASET.insights\`
 WHERE category = 'Cost'
   AND subtype IN ('Dead end table', 'Leaf dead end table', 'Unused table')
   AND overview.num_bytes IS NOT NULL
-ORDER BY savings_usd_30d DESC" > storage_waste.csv
+ORDER BY savings_usd_30d DESC" 2>/dev/null > storage_waste.csv
 ```
 
 **Note:** `cost_30d` and `savings_30d` may be null — `total_tib` is the reliable sizing signal. Include `last_modified_time` to detect external writers (see Key Signal above).

@@ -66,7 +66,7 @@ WHERE category = 'Cost'
   AND type = 'Compute costs'
   AND subtype = 'Re-assign reservation for Dataform models'
 --ORDER BY cost_30d DESC
-" > compute_assignment_candidates.csv
+" 2>/dev/null > compute_assignment_candidates.csv
 ```
 
 5. Resolve reservation targets using `recommended_model` values and reservation edition metadata:
@@ -112,7 +112,7 @@ FROM \`masthead-prod.YOUR_DATASET.insights\`,
 WHERE category = 'Cost'
   AND type = 'Compute costs'
   AND subtype = 'Re-assign reservation for Dataform models'
-ORDER BY CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) DESC" > compute_assignment_final.csv
+ORDER BY CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) DESC" 2>/dev/null > compute_assignment_final.csv
 ```
 
 7. Apply all recommendations based on the detected orchestration tool:

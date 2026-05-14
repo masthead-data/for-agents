@@ -54,7 +54,7 @@ FROM \`masthead-prod.YOUR_DATASET.insights\`
 WHERE category = 'Cost'
   AND type = 'Storage costs'
   AND target_level = 'Dataset'
-ORDER BY savings_usd_30d DESC" > dataset_storage_candidates.csv
+ORDER BY savings_usd_30d DESC" 2>/dev/null > dataset_storage_candidates.csv
 ```
 
 **Note:** `savings_30d` is the primary ranking signal. Review `recommended_action` to understand what Masthead is suggesting per dataset.
