@@ -17,6 +17,24 @@ When a skill runs for the first time it will ask you for your Masthead insights 
 
 These skills are designed to be consumed directly by AI agents such as Claude Code or GitHub Copilot.
 
+Use the [Skills CLI](https://github.com/vercel-labs/skills) to install all skills directly into your project:
+
+```bash
+npx skills add masthead-data/for-agents
+```
+
+or pick a specific skill:
+
+```bash
+npx skills add masthead-data/for-agents --skill masthead-storage-savings-with-tables
+```
+
+Once installed, ask your agent:
+
+```text
+Optimize my BigQuery storage costs using Masthead insights
+```
+
 ### Claude Code
 
 Add the Masthead plugin to your Claude Code tools configuration ([about Claude Code plugins](https://code.claude.com/docs/en/discover-plugins#install-plugins)):
@@ -25,24 +43,6 @@ Add the Masthead plugin to your Claude Code tools configuration ([about Claude C
 /plugin marketplace add masthead-data/for-agents
 /plugin install masthead-data-skills@masthead-data
 /reload-plugins
-```
-
-### GitHub Copilot / Vercel Skills CLI
-
-Use the [Vercel Skills CLI](https://github.com/vercel-labs/skills) to install skills directly into your project:
-
-```bash
-# Install all skills globally (available in all projects)
-npx skills add masthead-data/for-agents --global
-
-# Install a specific skill
-npx skills add masthead-data/for-agents --skill masthead-storage-savings-with-tables
-```
-
-Once installed, ask your agent naturally:
-
-```text
-Optimize my BigQuery storage costs using Masthead insights
 ```
 
 ## Available Skills
