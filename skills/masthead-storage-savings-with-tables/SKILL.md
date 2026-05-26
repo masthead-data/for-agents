@@ -54,7 +54,7 @@ If a table is flagged `Unused` **and** has a recent `last_modified_time` in the 
 ### Step 1: Query Storage Waste
 
 ```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
+bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
   subtype,
   project_id,
@@ -68,18 +68,18 @@ FROM \`masthead-prod.YOUR_DATASET.insights\`
 WHERE category = 'Cost'
   AND subtype IN ('Dead end table', 'Leaf dead end table', 'Unused table')
   AND overview.num_bytes IS NOT NULL
-ORDER BY savings_usd_30d DESC" 2>/dev/null > storage_waste.csv
+ORDER BY savings_usd_30d DESC"
 ```
 
 **Note:** `cost_30d` and `savings_30d` may be null — `total_tib` is the reliable sizing signal. Include `last_modified_time` to detect external writers (see Key Signal above).
 
 ### Step 2: Review and Decide
 
-Review `storage_waste.csv` and add a `status` column with values:
+Review the retrieved list of candidates. The user or agent can choose the most optimal format to store, present, or review these candidates (e.g., as a Markdown table, a CSV file, or an interactive terminal selection). Decide on the action for each table:
 
-- `keep` - Table is needed
-- `to drop` - Safe to remove
-- `investigate` - Needs further analysis
+- `keep` — Table is needed
+- `to drop` — Safe to remove
+- `investigate` — Needs further analysis
 
 **Review criteria:**
 
@@ -91,27 +91,14 @@ Review `storage_waste.csv` and add a `status` column with values:
 
 ### Step 3: Drop Approved Tables
 
-```bash
-# Generate DROP statements
-# Column 3 in storage_waste.csv is target_resource (project.dataset.table)
-awk -F',' '$NF=="to drop" {
-  print "bq rm -f -t " $3
-}' storage_waste.csv > drop_tables.sh
-
-# Review generated commands
-cat drop_tables.sh
-
-# Execute (after review, and run only by users!)
-bash drop_tables.sh
-```
-
-**Safe mode (dry-run first):**
+For each table marked `to drop`, run:
 
 ```bash
-# Add --dry-run flag to each command
-# To be run by users only!
-sed 's/bq rm/bq rm --dry-run/' drop_tables.sh > drop_tables_dryrun.sh
-bash drop_tables_dryrun.sh
+# Dry-run first (to be executed by the user)
+bq rm --dry-run -f -t YOUR_PROJECT:YOUR_DATASET.YOUR_TABLE
+
+# Execute after review (to be executed by the user)
+bq rm -f -t YOUR_PROJECT:YOUR_DATASET.YOUR_TABLE
 ```
 
 ### Step 4: Verify Savings

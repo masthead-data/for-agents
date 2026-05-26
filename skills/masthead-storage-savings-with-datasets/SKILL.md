@@ -40,7 +40,7 @@ Before switching a dataset to physical storage billing, drop unused/dead-end tab
 ### Step 1: Query Dataset-Level Storage Recommendations
 
 ```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
+bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
   subtype,
   project_id,
@@ -54,14 +54,14 @@ FROM \`masthead-prod.YOUR_DATASET.insights\`
 WHERE category = 'Cost'
   AND type = 'Storage costs'
   AND target_level = 'Dataset'
-ORDER BY savings_usd_30d DESC" 2>/dev/null > dataset_storage_candidates.csv
+ORDER BY savings_usd_30d DESC"
 ```
 
 **Note:** `savings_30d` is the primary ranking signal. Review `recommended_action` to understand what Masthead is suggesting per dataset.
 
 ### Step 2: Review Candidates
 
-Open `dataset_storage_candidates.csv` and add a `status` column:
+Review the retrieved list of candidates. The user or agent can choose the most optimal format to store, present, or review these candidates (e.g., as a Markdown table, a CSV file, or an interactive terminal selection). Decide on the action for each dataset:
 
 - `apply` — Ready to execute the recommended action
 - `skip` — Keep current configuration
@@ -86,18 +86,11 @@ bq update --storage_billing_model=PHYSICAL YOUR_PROJECT:YOUR_DATASET
 bq update --storage_billing_model=LOGICAL YOUR_PROJECT:YOUR_DATASET
 ```
 
-Generate and review commands for all approved datasets:
+For each dataset marked `apply`, run the appropriate command (to be executed by the user after review):
 
 ```bash
-# Generate commands from CSV (column 3 is target_resource: project:dataset)
-awk -F',' '$NF=="apply" && $(NF-1)!="" {
-  split($3, parts, ".")
-  print "bq update --storage_billing_model=" $(NF-1) " " parts[1] ":" parts[2]
-}' dataset_storage_candidates.csv > update_billing_models.sh
-
-cat update_billing_models.sh
-# Executable only by a human operator after review!
-bash update_billing_models.sh
+# Dry-run is not supported for billing model changes — review before executing
+bq update --storage_billing_model=PHYSICAL YOUR_PROJECT:YOUR_DATASET
 ```
 
 **Note:** Billing model changes take effect immediately but cost impact is reflected in the next billing cycle. Wait at least 14 days before evaluating savings.

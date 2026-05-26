@@ -75,6 +75,9 @@ Review the retrieved list of candidates. The user or agent can choose the most o
 
 ### Step 3: Pause/Disable the Pipelines
 
+> [!IMPORTANT]
+> All query recommendations must be reviewed by a human before applying them. Do not pause or disable pipelines without verification from a developer or operator.
+
 Based on the pipeline's technology, apply the corresponding action for each candidate marked for deactivation:
 
 #### Dataform

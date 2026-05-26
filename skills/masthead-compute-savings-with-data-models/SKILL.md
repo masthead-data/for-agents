@@ -38,7 +38,7 @@ Extract and apply recommendations from Masthead insights automatically.
 2. Identify which orchestration technology is in use by querying available recommendations:
 
 ```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
+bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT subtype, COUNT(*) AS recommendation_count
 FROM \`masthead-prod.YOUR_DATASET.insights\`
 WHERE category = 'Cost'
@@ -53,7 +53,7 @@ If compute model recommendations are not present or all rows share the same tech
    Replace the `subtype` value with the one detected in step 2 (e.g. `'Re-assign reservation for Dataform models'`, `'Re-assign reservation for dbt models'`, or `'Re-assign reservation for Airflow DAGs'`).
 
 ```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
+bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
   JSON_VALUE(m, '$.model_id') AS action_name,
   JSON_VALUE(op, '$.recommended_compute_model') AS recommended_model,
@@ -66,7 +66,7 @@ WHERE category = 'Cost'
   AND type = 'Compute costs'
   AND subtype = 'Re-assign reservation for Dataform models'
 --ORDER BY cost_30d DESC
-" 2>/dev/null > compute_assignment_candidates.csv
+"
 ```
 
 5. Resolve reservation targets using `recommended_model` values and reservation edition metadata:
@@ -74,7 +74,7 @@ WHERE category = 'Cost'
 - Verify reservation editions using `INFORMATION_SCHEMA.RESERVATIONS`:
 
 ```bash
-bq query --project_id=YOUR_PROJECT --location=US --use_legacy_sql=false --format=csv \
+bq query --project_id=YOUR_PROJECT --location=US --use_legacy_sql=false --format=pretty \
 "SELECT
   reservation_name,
   project_id,
@@ -99,10 +99,10 @@ ORDER BY project_id, reservation_name"
 }
 ```
 
-6. Convert recommendations into assignment lists automatically:
+6. Retrieve the final assignment mapping. The user or agent can choose the most optimal format to store, present, or review these candidates (e.g., as a Markdown table, a CSV file, or an interactive terminal selection):
 
 ```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
+bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
   JSON_VALUE(m, '$.model_id') AS action_name,
   JSON_VALUE(op, '$.recommended_compute_model') AS recommended_model
@@ -112,17 +112,20 @@ FROM \`masthead-prod.YOUR_DATASET.insights\`,
 WHERE category = 'Cost'
   AND type = 'Compute costs'
   AND subtype = 'Re-assign reservation for Dataform models'
-ORDER BY CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) DESC" 2>/dev/null > compute_assignment_final.csv
+ORDER BY CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) DESC"
 ```
 
-7. Apply all recommendations based on the detected orchestration tool:
+7. Apply all approved recommendations based on the detected orchestration tool:
+
+> [!IMPORTANT]
+> All query recommendations must be reviewed by a human before applying them to your orchestration configuration. Do not automate execution without developer verification.
 
 #### Dataform
 
 - Open `definitions/_reservations.js`.
-- The `action_name` values in the CSV map directly to Dataform action IDs (e.g. `project.dataset.table`) as used in the `actions` arrays of `_reservations.js`.
-- Replace `on_demand` `actions` with all rows where `recommended_model = 'ON-DEMAND'`.
-- Replace reserved reservation `actions` with all rows where `recommended_model != 'ON-DEMAND'`.
+- The `action_name` values map directly to Dataform action IDs (e.g. `project.dataset.table`) as used in the `actions` arrays of `_reservations.js`.
+- Replace `on_demand` `actions` with all actions where the recommended model is `ON-DEMAND`.
+- Replace reserved reservation `actions` with all actions where the recommended model is not `ON-DEMAND` (e.g., using the reservation mapped to the recommended edition).
 - Remove duplicates; keep only actions present in this repo's Dataform graph.
 - Verify: `dataform compile` and check for duplicate assignments.
 - See package reference: [`@masthead-data/dataform-package`](https://github.com/masthead-data/dataform-package)
@@ -168,7 +171,7 @@ For dbt and Airflow, follow the verification steps in their respective repositor
 - File starts with `_` to ensure it runs first in Dataform queue
 - Changes take effect on next Dataform workflow run
 - Package automatically handles global assignment (no per-file edits needed)
-- Default mode is full auto-apply of recommendations; rely on PR review for validation
+- **All recommendations must be human-reviewed** before applying. Rely on PR review or explicit confirmation.
 - The only interactive checkpoint is reservation selection when more than one reservation matches the recommended edition
 
 ## Package References
