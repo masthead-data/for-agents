@@ -39,7 +39,7 @@ Identify and pause/disable data pipelines that consume BigQuery compute resource
 ### Step 1: Query Compute Waste from Dead-End Pipelines
 
 ```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
+bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
   subtype,
   project_id,
@@ -56,15 +56,15 @@ FROM \`masthead-prod.YOUR_DATASET.insights\`
 WHERE category = 'Cost'
   AND type = 'Dead end'
   AND subtype = 'Dead end pipeline'
-ORDER BY savings_usd_30d DESC" 2>/dev/null > dead_end_pipelines.csv
+ORDER BY savings_usd_30d DESC"
 ```
 
 ### Step 2: Review and Decide
 
-Review `dead_end_pipelines.csv` and add a `status` column with values:
+Review the retrieved list of candidates. The user or agent can choose the most optimal format to store, present, or review these candidates (e.g., as a Markdown table, a CSV file, or an interactive terminal selection). Decide on the action for each pipeline:
 
 - `pause` — Safe to disable or pause this pipeline/job
-- `keep` — Pipeline is needed (e.g. writing data that is read externally or via tools not tracked in lineage)
+- `keep` — Pipeline is needed (e.g., writing data that is read externally or via tools not tracked in lineage)
 - `investigate` — Needs further analysis
 
 **Review criteria:**
@@ -75,7 +75,7 @@ Review `dead_end_pipelines.csv` and add a `status` column with values:
 
 ### Step 3: Pause/Disable the Pipelines
 
-Based on the `technology` column of the CSV, apply the corresponding action:
+Based on the pipeline's technology, apply the corresponding action for each candidate marked for deactivation:
 
 #### Dataform
 1. Locate the SQLX file defining the model in the repository (e.g., search for `name: "model_id"` or `target_resource` table name).

@@ -62,6 +62,11 @@ Optimize BigQuery storage costs at the dataset level by switching storage billin
 
 **What you get:** a prioritized list of datasets eligible for billing model changes or expiration policies, and ready-to-run commands to apply them.
 
+### `masthead-compute-savings-with-dead-end-pipelines`
+Optimize BigQuery compute costs by identifying and pausing/disabling dead-end pipelines that consume compute resources but only feed into dead-end tables.
+
+**What you get:** a ranked list of active dead-end pipelines and the necessary steps to disable them based on their technology (Dataform, dbt, Airflow, Fivetran, BQ DTS, custom).
+
 ---
 
 ## Resources
