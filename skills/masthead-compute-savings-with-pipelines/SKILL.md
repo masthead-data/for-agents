@@ -1,20 +1,20 @@
 ---
-name: masthead-compute-savings-with-dead-end-pipelines
-description: Optimize BigQuery compute costs by identifying and pausing/disabling dead-end pipelines that consume compute resources but only feed into dead-end tables.
+name: masthead-compute-savings-with-pipelines
+description: Optimize BigQuery compute costs by identifying and pausing/disabling unused, dead-end, or inefficient pipelines that consume compute resources.
 compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only permissions to run BigQuery jobs and access dataset tables.
 ---
 
-# Optimize Compute Costs (Dead-End Pipelines)
+# Optimize Compute Costs (Pipeline Cleanup)
 
 ## Purpose
 
-Identify and pause/disable data pipelines that consume BigQuery compute resources (slots, bytes billed) but only feed into dead-end or unused tables, based on Masthead Data lineage and cost analysis.
+Identify and pause/disable data pipelines that consume BigQuery compute resources (slots, bytes billed) but are unused, dead-end, or inefficient, based on Masthead Data lineage and cost analysis.
 
 ## When to Use
 
 - Reducing compute costs (slot usage or on-demand query costs) by eliminating wasted processing.
-- Cleaning up legacy or orphaned pipelines that are still scheduled to run.
-- Coordinating compute cleanup with storage cleanup (dropping the target dead-end tables).
+- Cleaning up legacy, unused, or orphaned pipelines that are still scheduled to run.
+- Coordinating compute cleanup with storage cleanup (dropping the target tables).
 
 ## Prerequisites
 
@@ -36,7 +36,7 @@ Identify and pause/disable data pipelines that consume BigQuery compute resource
 
    On subsequent runs, read this value from the instructions file instead of prompting the user again.
 
-### Step 1: Query Compute Waste from Dead-End Pipelines
+### Step 1: Query Compute Waste from Pipelines
 
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
@@ -54,8 +54,7 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   last_updated_time
 FROM \`masthead-prod.YOUR_DATASET.insights\`
 WHERE category = 'Cost'
-  AND type = 'Dead end'
-  AND subtype = 'Dead end pipeline'
+  AND (subtype LIKE '%pipeline%' OR type = 'Dead end' AND subtype = 'Dead end pipeline')
 ORDER BY savings_usd_30d DESC"
 ```
 
@@ -108,10 +107,10 @@ Based on the pipeline's technology, apply the corresponding action for each cand
 
 #### Airflow
 1. Locate the DAG file defining the workflow matching `model_id` or the task writing to `target_resource`.
-2. If the entire DAG is dead-end:
+2. If the entire DAG is unused or dead-end:
    - Pause the DAG in the Airflow UI, or
    - Set `is_paused_upon_creation=True` in the DAG definition in code.
-3. If only a single task is dead-end, comment out or remove the task from the DAG and update downstream dependencies.
+3. If only a single task is unused or dead-end, comment out or remove the task from the DAG and update downstream dependencies.
 
 #### BQ DTS (BigQuery Data Transfer Service)
 1. List transfer configurations to locate the matching resource ID:
@@ -135,7 +134,7 @@ Based on the pipeline's technology, apply the corresponding action for each cand
 ### Step 4: Clean Up Target Tables (Storage Savings)
 
 > [!IMPORTANT]
-> Once a pipeline is paused/disabled, always drop the target dead-end table to stop storage costs. Pausing the pipeline *first* is critical: dropping a table while its producer is still active will result in the table being automatically recreated on the next scheduled run.
+> Once a pipeline is paused/disabled, always drop the target table to stop storage costs. Pausing the pipeline *first* is critical: dropping a table while its producer is still active will result in the table being automatically recreated on the next scheduled run.
 > Run `masthead-storage-savings-with-tables` to identify and drop the tables.
 
 ### Step 5: Verify Savings
