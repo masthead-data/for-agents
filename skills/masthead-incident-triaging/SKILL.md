@@ -14,7 +14,7 @@ This skill instructs agents on how to triage, analyze, and resolve BigQuery data
 
 * Active connection to the Masthead MCP server: `https://mcp.mastheadata.com/mcp`.
 * Valid bearer token auth or service account configuration.
-* For client setup guides and configuration templates, refer to the [Masthead MCP Server Setup Documentation](https://docs.mastheadata.com/mcp) and the [MCP Tools Reference](https://docs.mastheadata.com/mcp/tools).
+* For client setup guides and configuration templates, refer to the [Masthead MCP Server Setup Documentation](https://docs.mastheadata.com/developer/mcp/) and the [MCP Tools Reference](https://docs.mastheadata.com/developer/mcp/tools).
 
 ---
 
@@ -110,3 +110,18 @@ If the incident was resolved but the table is critical, elevate its monitoring t
 * **Verify IDs:** Always invoke `list_projects` and `list_users` first to verify project and email values before executing queries or assignments.
 * **Triage Order:** Always perform Phase 1 (Triage) and Phase 2 (Impact Analysis) before proposing Phase 3 (Mitigation) updates.
 * **Human Review:** Do not silently mark incidents as `RESOLVED` or assign ownership without displaying the current state and getting user confirmation first.
+* **Pagination & Large Datasets:** When retrieving list data (e.g., using `list_open_incidents` or `list_incidents`), pay close attention to the `total` number of records in the response. If the `total` count is larger than the number of returned items (e.g., limit is reached), you **MUST** paginate using the `page` (1-indexed) and `limit` parameters to explore all relevant items. Do not assume the first page contains all incidents.
+
+---
+
+## Web UI URL Reference
+
+If the user asks to open or view an incident, table, or cost detail in the Masthead Web UI, construct and provide a clickable URL using the following templates:
+
+* **Incident Details:** `https://app.mastheadata.com/incidents/<incidentGroupUuid>`
+* **Lineage:**
+  * **Table view**: `https://app.mastheadata.com/lineage?project=<projectId>&dataset=<datasetId>&table=<tableId>`
+  * **Pipeline view**: `https://app.mastheadata.com/lineage?uuid=<pipelineUUID>&type=TABLE&tab=pipeline_view`
+* **Dictionary:**:
+  * **Table:** `https://app.mastheadata.com/dictionary/details?project=<projectId>&dataset=<datasetId>&table=<tableId>`
+  * **Dashboards**: `https://app.mastheadata.com/dictionary/reporting-assets?uuid=<assetUUID>&type=<assetType>`
