@@ -5,6 +5,11 @@
   "author": {
     "name": "Masthead Data"
   },
-  "mcpServers": {},
+  "mcpServers": {
+    "masthead": {
+      "type": "http",
+      "url": "https://mcp.mastheadata.com/mcp"
+    }
+  },
   "repository": "https://github.com/masthead-data/for-agents"
 }
