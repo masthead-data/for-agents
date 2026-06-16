@@ -124,7 +124,7 @@ For important data assets, elevate its monitoring tier to `PRIORITY` or `CRITICA
 
 If the user asks to open or view an incident, table, or cost detail in the Masthead Web UI, construct and provide a clickable URL using the following templates:
 
-* **Incident Details**: `https://app.mastheadata.com/incidents/<incidentGroupUuid>/<lastIncidentId>`
+* **Incident Details**: `https://app.mastheadata.com/incident/<incidentGroupUuid>/<lastIncidentId>`
 * **Lineage**:
   * **Table view**: `https://app.mastheadata.com/lineage?project=<projectId>&dataset=<datasetId>&table=<tableId>`
   * **Pipeline view**: `https://app.mastheadata.com/lineage?uuid=<pipelineUUID>&type=TABLE&tab=pipeline_view`
