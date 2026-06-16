@@ -2,6 +2,10 @@
 
 A curated collection of Agent Skills for working with [Masthead Data](https://mastheadata.com) — BigQuery data observability and cost optimization for Google Cloud.
 
+This repository supports two core modes of operation:
+1. **FinOps (Cost Savings)**: Local agent skills to optimize BigQuery compute, storage, and models based on historical dataset insights.
+2. **Real-Time Observability**: A Model Context Protocol (MCP) server integration to triage, analyze, and resolve live pipeline errors and table anomalies.
+
 ## Prerequisites
 
 Before installing, make sure you have:
@@ -67,6 +71,10 @@ Optimize BigQuery compute costs by identifying and pausing/disabling pipelines t
 
 **What you get:** a ranked list of active pipelines and the necessary steps to disable them based on their technology (Dataform, dbt, Airflow, Fivetran, BQ DTS, custom).
 
+### `masthead-incident-triaging`
+Triage, analyze, and respond to real-time data incidents and anomalies using the Masthead MCP server.
+
+**What you get:** immediate status verification, root-cause details, downstream lineage impact analysis, and direct incident management (assignment, severity updates, and notes).
 
 ---
 
