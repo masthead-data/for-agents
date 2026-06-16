@@ -31,7 +31,7 @@ Before querying incidents, retrieve the list of active GCP project IDs monitored
 * **Tool**: `list_projects`
 * **Example Prompt**: *"List all GCP projects monitored by Masthead."*
 
-#### 2. Scan Open Incidents
+#### 2. Scan Incidents
 Fetch active anomalies and pipeline issues. Try to minimize the scope of your query by filtering with project IDs, technologies, and date ranges to find relevant incidents faster.
 - The statuses `OPEN`, `IN_PROGRESS`, `ACKNOWLEDGED` require attention, while `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered resolved or non-actionable.
 - Filter the alertTiers to `CRITICAL` or `PRIORITY` to focus on high-impact incidents first.
@@ -47,7 +47,7 @@ Fetch active anomalies and pipeline issues. Try to minimize the scope of your qu
 Use the incident group UUID to retrieve detailed descriptions of the failure, including the failing table, alert type, and raw error messages.
 * **Tool**: `get_incident_details`
 * **Key Arguments**: `incidentGroupUuid` (string)
-* **Example Prompt**: *"Get full details for incident 11111111-2222-3333-4444-555555555555."*
+* **Example Prompt**: *"Get details for volume incident on table project.dataset.table_id."*
 
 ---
 
@@ -89,19 +89,19 @@ Retrieve registered team members in your Masthead tenant to assign tasks correct
 Route the incident to a specific team member.
 * **Tool**: `assign_incident_owner`
 * **Key Arguments**: `incidentGroupUuid`, `email`
-* **Example Prompt**: *"Assign incident 11111111-2222-3333-4444-555555555555 to user@yourcompany.com."*
+* **Example Prompt**: *"Assign incidents on table project.dataset.table_id to user@yourcompany.com."*
 
 #### 3. Adjust Status & Severity
 Set the status and severity. Statuses: `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered final and should be used when the incident is resolved or doesn't require any action.
 * **Tools**: `update_incident_status`, `update_incident_severity`
 * **Key Arguments**: `incidentGroupUuid`, `status` and/or `severity`
-* **Example Prompt**: *"Mark incident 11111111-2222-3333-4444-555555555555 as in progress and escalate it to P1."*
+* **Example Prompt**: *"Mark incident freshness for table project.dataset.table_id as in progress and escalate it to P1."*
 
 #### 4. Document Investigation (Notes)
 Append audit log notes or comments documenting progress, pipeline rerun confirmations, or root-cause explanations.
 * **Tool**: `append_incident_notes`
 * **Key Arguments**: `incidentGroupUuid`, `notes` (string)
-* **Example Prompt**: *"Add the note 'Investigating query schema change after release' to incident 11111111-2222-3333-4444-555555555555."*
+* **Example Prompt**: *"Add the note 'Investigating query schema change after release' to incident on table project.dataset.table_id."*
 
 #### 5. Adjust Monitoring Priority (Optional)
 For important data assets, elevate its monitoring tier to `PRIORITY` or `CRITICAL` to reduce the time to detect future incidents. On the other hand, if the data asset is not critical and you want to reduce noise, you can lower its monitoring tier to `REGULAR` or `MUTED`.
