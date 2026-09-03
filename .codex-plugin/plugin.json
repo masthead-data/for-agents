@@ -19,10 +19,5 @@
     "google-cloud"
   ],
   "skills": "./skills/",
-  "mcpServers": {
-    "masthead": {
-      "type": "http",
-      "url": "https://mcp.mastheadata.com/mcp"
-    }
-  }
+  "mcpServers": "./mcp.json"
 }

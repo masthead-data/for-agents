@@ -1,0 +1,25 @@
+name: Validate Plugins & Skills
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Run Manifest and Skills Validation
+        run: npm run validate
+
+      - name: Run Markdown Lint
+        run: npm run lint:md

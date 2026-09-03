@@ -1,14 +1,15 @@
 {
   "name": "masthead-data",
+  "description": "Official Masthead Data plugins and agent skills for BigQuery data observability and FinOps cost optimization",
   "owner": {
     "name": "Masthead Data",
-    "email": "contact@mastheadata.com"
+    "email": "team@mastheadata.com"
   },
   "plugins": [
     {
-      "name": "masthead-data-skills",
+      "name": "masthead-agent-tools",
       "source": "./",
-      "description": "Masthead Data Agent Skills for BigQuery Data Observability and Cost Optimization",
+      "description": "Masthead Agent Tools for BigQuery Data Observability and FinOps",
       "author": {
         "name": "Masthead Data"
       }

@@ -17,25 +17,25 @@ Automatically assign data models from data orchestration to BigQuery slot reserv
 - Optimizing costs by moving low-priority workloads to on-demand
 - Ensuring critical pipelines get guaranteed compute resources
 
+## Operating Mode: Cautious Advisory (Non-Action)
+
+This skill operates strictly in an advisory capacity:
+
+- **Zero Automated Configuration Changes**: The agent **never** alters reservation assignments or modifies repo files (`definitions/_reservations.js`, `dbt_project.yml`) directly without explicit human direction.
+- **Agent Role**: Query insights for compute model recommendations, calculate workload trade-offs between slot editions and on-demand, verify reservation capacity, and prepare proposed configuration diffs or review tables for human approval.
+
 ## Implementation Steps
 
-### Step 1: Source Configuration
+### Step 0: Dataset Context
 
-Extract and apply recommendations from Masthead insights automatically.
+Ensure access to your Masthead insights dataset in BigQuery:
 
-1. Ask user for the BigQuery dataset where Masthead insights are stored. This dataset must contain an `insights` table with the same schema as `masthead-prod.YOUR_DATASET.insights`. If the user does not have access, direct them to [request access](https://docs.mastheadata.com/api#get-access-to-bigquery-resources).
+- **Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (see [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md) and [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md)).
+- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache it per their preference (global `~/.masthead/config.json` recommended).
 
-   Once provided, **immediately persist it** by appending to the project-level agent instructions file (e.g. `.github/copilot-instructions.md`, or `AGENTS.md` — whichever already exists in the project root, or creating if none exist):
+### Step 1: Detect Orchestration Technology
 
-   ```
-   <!-- masthead -->
-   MASTHEAD_DATASET=YOUR_DATASET
-   <!-- /masthead -->
-   ```
-
-   On subsequent runs, read this value from the instructions file instead of prompting the user again.
-
-2. Identify which orchestration technology is in use by querying available recommendations:
+Identify which orchestration technology is in use by querying available recommendations:
 
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
@@ -48,9 +48,11 @@ GROUP BY subtype"
 
 If compute model recommendations are not present or all rows share the same technology, infer from the user's project structure (presence of `dbt_project.yml` → dbt, `definitions/` folder → Dataform, Airflow DAG files → Airflow). Confirm the detected tool with the user before proceeding.
 
-3. Pull recommendations from `masthead-prod.YOUR_DATASET.insights`:
+### Step 2: Pull Recommendations
 
-   Replace the `subtype` value with the one detected in step 2 (e.g. `'Re-assign reservation for Dataform models'`, `'Re-assign reservation for dbt models'`, or `'Re-assign reservation for Airflow DAGs'`).
+Pull recommendations from `masthead-prod.YOUR_DATASET.insights`:
+
+Replace the `subtype` value with the one detected in step 1 (e.g. `'Re-assign reservation for Dataform models'`, `'Re-assign reservation for dbt models'`, or `'Re-assign reservation for Airflow DAGs'`).
 
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
@@ -69,7 +71,9 @@ WHERE category = 'Cost'
 "
 ```
 
-5. Resolve reservation targets using `recommended_model` values and reservation edition metadata:
+### Step 3: Resolve Reservation Targets
+
+Resolve reservation targets using `recommended_model` values and reservation edition metadata:
 
 - Verify reservation editions using `INFORMATION_SCHEMA.RESERVATIONS`:
 
@@ -99,7 +103,9 @@ ORDER BY project_id, reservation_name"
 }
 ```
 
-6. Retrieve the final assignment mapping. The user or agent can choose the most optimal format to store, present, or review these candidates (e.g., as a Markdown table, a CSV file, or an interactive terminal selection):
+### Step 4: Review Assignment Mapping
+
+Retrieve the final assignment mapping. The user or agent can choose the most optimal format to store, present, or review these candidates (e.g., as a Markdown table, a CSV file, or an interactive terminal selection):
 
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
@@ -115,10 +121,12 @@ WHERE category = 'Cost'
 ORDER BY CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) DESC"
 ```
 
-7. Apply all approved recommendations based on the detected orchestration tool:
+### Step 5: Prepare Configuration Artifacts (User-Executed)
 
 > [!IMPORTANT]
-> All query recommendations must be reviewed by a human before applying them to your orchestration configuration. Do not automate execution without developer verification.
+> The agent does **not** alter repository configuration files directly without explicit human direction. All query recommendations must be reviewed and merged by a developer.
+
+Prepare the configuration diffs or artifacts for the detected orchestration tool:
 
 #### Dataform
 
@@ -142,7 +150,7 @@ ORDER BY CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) DESC"
 - Map recommendations to DAG or task-level BigQuery reservation labels.
 - Update the relevant operator configuration per the repo's instructions.
 
-### Step 2: Verify Changes
+### Step 6: Verify Changes
 
 After applying, confirm assignments are non-overlapping and align with the recommendation output. For Dataform:
 

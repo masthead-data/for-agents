@@ -1,83 +1,113 @@
-# Masthead Agent Skills
+# Masthead Agent Plugins & Skills
 
-A curated collection of Agent Skills for working with [Masthead Data](https://mastheadata.com) — BigQuery data observability and cost optimization for Google Cloud.
+A unified, multiplatform agent toolkit for [Masthead Data](https://mastheadata.com) — BigQuery data observability and FinOps cost optimization for Google Cloud.
 
-This repository supports two core modes of operation:
-1. **FinOps (Cost Savings)**: Local agent skills to optimize BigQuery compute, storage, and models based on historical dataset insights.
-2. **Real-Time Observability**: A Model Context Protocol (MCP) server integration to triage, analyze, and resolve live pipeline errors and table anomalies.
+This repository provides single-source-of-truth plugins and skills for:
 
-## Prerequisites
+- **Claude Code**
+- **OpenAI Codex**
+- **Antigravity / Gemini CLI**
+- **Universal Skills CLI**
 
-Before installing, make sure you have:
+---
 
-- **A Masthead Data account** with a provisioned insights dataset. [Request access →](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)
-- **`gcloud` CLI** authenticated (`gcloud auth login`)
-- **`bq` CLI** available (`bq version` to verify)
-- **BigQuery permissions**: ability to run jobs and read data in your project
+## Core Capabilities
 
-When a skill runs for the first time it will ask you for your Masthead insights dataset ID (e.g. `my-project.masthead_insights`). It stores this in your project's instructions file so you won't be prompted again.
+1. **FinOps (Cost Savings)**: Optimize BigQuery compute, storage, data models, and pipelines based on historical dataset insights.
+2. **Real-Time Observability**: Connect via Model Context Protocol (MCP) to investigate, trace lineage, and resolve live pipeline failures and data anomalies.
 
-## Installation & Usage
+### Safety Framework (Dual-Mode Execution)
 
-These skills are designed to be consumed directly by AI agents such as Claude Code or GitHub Copilot.
+All skills adhere to strict human-in-the-loop safety controls:
 
-Use the [Skills CLI](https://github.com/vercel-labs/skills) to install all skills directly into your project:
+- **Recommendation Mode (Default)**: Queries insights, calculates potential dollar/slot savings, traces blast radius, and formats actionable tables. **Zero destructive commands or state changes are executed.**
+- **Action Mode**: Runs DDL drop statements, updates reservation configurations, or transitions incident statuses **only after explicit human verification and sign-off**.
 
-```bash
-npx skills add masthead-data/for-agents
-```
+---
 
-or pick a specific skill:
+## Installation
 
-```bash
-npx skills add masthead-data/for-agents --skill masthead-storage-savings-with-tables
-```
+### 1. Claude Code
 
-Once installed, ask your agent:
-
-```text
-Optimize my BigQuery storage costs using Masthead insights
-```
-
-### Claude Code
-
-Add the Masthead plugin to your Claude Code tools configuration ([about Claude Code plugins](https://code.claude.com/docs/en/discover-plugins#install-plugins)):
+Add the Masthead plugin marketplace and install:
 
 ```text
 /plugin marketplace add masthead-data/for-agents
-/plugin install masthead-data-skills@masthead-data
+/plugin install masthead-agent-tools@masthead-data
 /reload-plugins
 ```
 
+### 2. OpenAI Codex CLI
+
+Add the marketplace and install via Codex:
+
+```bash
+codex plugin marketplace add masthead-data/for-agents
+```
+
+Then inside Codex:
+
+```text
+/plugins
+# Select masthead-agent-tools and install
+```
+
+### 3. Google Antigravity & Agent Plugins (1.0.0)
+
+This repository adheres to the vendor-neutral [Agent Plugins 1.0.0](https://agent-plugins.org) specification backed by Google, OpenAI, Microsoft, and Amazon.
+
+To add this plugin to Antigravity:
+
+- **Workspace Level**: Clone into your project's `.agents/plugins/`:
+
+  ```bash
+  git clone https://github.com/masthead-data/for-agents.git .agents/plugins/masthead-agent-tools
+  ```
+
+- **Global Level**: Make it available across all workspaces by placing it in `~/.gemini/config/plugins/`:
+
+  ```bash
+  git clone https://github.com/masthead-data/for-agents.git ~/.gemini/config/plugins/masthead-agent-tools
+  ```
+
+### 4. Universal Skills CLI
+
+Install individual skills or the full suite directly into any project:
+
+```bash
+# Install all skills
+npx skills add masthead-data/for-agents
+
+# Or install a specific skill
+npx skills add masthead-data/for-agents --skill masthead-storage-savings-with-tables
+```
+
+---
+
+## Prerequisites & Authentication
+
+- **Masthead Account & Dataset**: A provisioned Masthead insights dataset in BigQuery. [Request access →](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)
+- **Google Cloud CLI**: Authenticated via `gcloud auth login` with BigQuery read permissions.
+- **MCP Server Authentication**: The Masthead MCP server at `https://mcp.mastheadata.com/mcp` authenticates via native Google OAuth 2.0 popup in your agent client (service account support coming soon).
+
+When a FinOps skill runs for the first time, it prompts for your insights dataset ID (e.g. `masthead-prod.client_xyz_insights`) and caches it into your global (`~/.masthead/config.json`) or project config (`.masthead/config.json`).
+
+---
+
 ## Available Skills
 
-### `masthead-compute-savings-with-data-models`
-Optimize BigQuery compute costs by assigning Dataform, dbt, or Airflow models to slot reservations or on-demand compute.
-
-**What you get:** updated reservation assignment config for your orchestration tool (Dataform, dbt or Airflow), verified against live Masthead recommendations.
-
-### `masthead-storage-savings-with-tables`
-Optimize BigQuery storage costs by identifying and removing dead-end and unused tables.
-
-**What you get:** a reviewed CSV of waste candidates ranked by savings impact, and a ready-to-run shell script to drop approved tables.
-
-### `masthead-storage-savings-with-datasets`
-Optimize BigQuery storage costs at the dataset level by switching storage billing models and setting expiration policies.
-
-**What you get:** a prioritized list of datasets eligible for billing model changes or expiration policies, and ready-to-run commands to apply them.
-
-### `masthead-compute-savings-with-pipelines`
-Optimize BigQuery compute costs by identifying and pausing/disabling pipelines that consume compute resources.
-
-**What you get:** a ranked list of active pipelines and the necessary steps to disable them based on their technology (Dataform, dbt, Airflow, Fivetran, BQ DTS, custom).
-
-### `masthead-incident-triaging`
-Triage, analyze, and respond to real-time data incidents and anomalies using the Masthead MCP server.
-
-**What you get:** immediate status verification, root-cause details, downstream lineage impact analysis, and direct incident management (assignment, severity updates, and notes).
+| Skill | Category | Mode | Description |
+| --- | --- | --- | --- |
+| [`masthead-incident-triaging`](skills/masthead-incident-triaging/) | Observability | MCP | Triage, trace upstream/downstream lineage, assign ownership, and manage live incidents. |
+| [`masthead-storage-savings-with-tables`](skills/masthead-storage-savings-with-tables/) | FinOps | Local SQL | Identify and clean up dead-end and unused BigQuery tables. |
+| [`masthead-storage-savings-with-datasets`](skills/masthead-storage-savings-with-datasets/) | FinOps | Local SQL | Optimize dataset-level billing models (logical vs. physical) and partition expiration. |
+| [`masthead-compute-savings-with-data-models`](skills/masthead-compute-savings-with-data-models/) | FinOps | Local SQL | Rebalance Dataform, dbt, and Airflow model compute between reservations and on-demand. |
+| [`masthead-compute-savings-with-pipelines`](skills/masthead-compute-savings-with-pipelines/) | FinOps | Local SQL | Detect and pause legacy, orphaned, or inefficient data pipelines. |
 
 ---
 
 ## Resources
 
 - [Masthead Documentation](https://docs.mastheadata.com)
+- [MCP Integration Guide](https://docs.mastheadata.com/developer/mcp/)
+- [Contributing Guidelines](CONTRIBUTING.md)

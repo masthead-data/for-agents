@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "masthead-agent-tools",
+  "version": "1.0.0",
+  "description": "Masthead Agent Tools for BigQuery Data Observability and FinOps"
+}
