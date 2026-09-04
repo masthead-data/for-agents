@@ -44,17 +44,17 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   subtype,
   project_id,
   target_resource,
-  JSON_VALUE(overview, '$.technology') AS technology,
-  JSON_VALUE(overview, '$.model_id') AS model_id,
-  JSON_VALUE(overview, '$.masthead_pipeline_id') AS masthead_pipeline_id,
-  SAFE_CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) AS cost_usd_30d,
-  SAFE_CAST(JSON_VALUE(overview, '$.savings_30d') AS FLOAT64) AS savings_usd_30d,
-  SAFE_CAST(JSON_VALUE(overview, '$.billed_slot_ms_30d') AS INT64) AS billed_slot_ms_30d,
-  SAFE_CAST(JSON_VALUE(overview, '$.billed_bytes_30d') AS INT64) AS billed_bytes_30d,
+  SAFE.STRING(overview.technology) AS technology,
+  SAFE.STRING(overview.model_id) AS model_id,
+  SAFE.STRING(overview.masthead_pipeline_id) AS masthead_pipeline_id,
+  SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
+  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
+  SAFE.INT64(overview.billed_slot_ms_30d) AS billed_slot_ms_30d,
+  SAFE.INT64(overview.billed_bytes_30d) AS billed_bytes_30d,
   last_updated_time
-FROM \`masthead-prod.YOUR_DATASET.insights\`
+FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
-  AND (subtype LIKE '%pipeline%' OR type = 'Dead end' AND subtype = 'Dead end pipeline')
+  AND (subtype LIKE '%pipeline%' OR (type = 'Dead end' AND subtype = 'Dead end pipeline'))
 ORDER BY savings_usd_30d DESC"
 ```
 

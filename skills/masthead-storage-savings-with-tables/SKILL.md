@@ -59,12 +59,12 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   subtype,
   project_id,
   target_resource,
-  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.resource_type') AS resource_type,
+  SAFE.STRING(operations[0].resource_type) AS resource_type,
   SAFE.INT64(overview.num_bytes) / POW(1024, 4) AS total_tib,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
   SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  SAFE.TIMESTAMP(JSON_VALUE(overview, '$.last_modified_time')) AS last_modified_time
-FROM \`masthead-prod.YOUR_DATASET.insights\`
+  SAFE.TIMESTAMP(SAFE.STRING(overview.last_modified_time)) AS last_modified_time
+FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND subtype IN ('Dead end table', 'Leaf dead end table', 'Unused table')
   AND overview.num_bytes IS NOT NULL
@@ -88,19 +88,18 @@ Review the retrieved list of candidates. The user or agent can choose the most o
 - Is this table part of an active experiment or migration?
 - **For repo-managed projects:** Search the codebase (e.g., `grep` for table name in model definitions, scripts) to confirm ownership. Table naming can be misleading (e.g. may seem like current outputs but could be legacy).
 - **Disable producers:** if there is a related pipeline code - it needs to be disabled to avoid regenerating the table after dropping.
+- **Inspect Live Metadata**: For ambiguous or high-value candidates, run the CLI equivalent of `table_get` to verify live row count, total bytes, labels, and exact `lastModifiedTime`:
+
+  ```bash
+  bq show --format=prettyjson YOUR_PROJECT:YOUR_DATASET.YOUR_TABLE
+  ```
 
 ### Step 3: Generate Remediation Artifacts (User-Executed)
 
 The agent does **not** execute drop commands. Instead, generate the remediation artifacts requested by the user for independent review and execution:
 
 1. **Review Artifacts**: Provide a clear Markdown summary or CSV candidate list with table sizes, 30-day savings, and last modified dates.
-2. **Execution Script**: When requested, prepare a standalone shell script containing `--dry-run` checks alongside the drop commands for the human operator to inspect and run:
-
-```bash
-# Generated for human operator review and execution:
-# Dry-run first to verify dependencies
-bq rm --dry-run -f -t YOUR_PROJECT:YOUR_DATASET.YOUR_TABLE
-```
+2. **Execution Script**: When requested, prepare a standalone shell script that inspects live table metadata before taking actions.
 
 ### Step 4: Verify Savings
 

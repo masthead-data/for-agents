@@ -16,12 +16,21 @@ This repository provides single-source-of-truth plugins and skills for:
 1. **FinOps (Cost Savings)**: Optimize BigQuery compute, storage, data models, and pipelines based on historical dataset insights.
 2. **Real-Time Observability**: Connect via Model Context Protocol (MCP) to investigate, trace lineage, and resolve live pipeline failures and data anomalies.
 
-### Safety Framework (Dual-Mode Execution)
+### Safety Framework: Cautious Advisory (Non-Action)
 
-All skills adhere to strict human-in-the-loop safety controls:
+All FinOps skills adhere to strict non-action principles:
 
-- **Recommendation Mode (Default)**: Queries insights, calculates potential dollar/slot savings, traces blast radius, and formats actionable tables. **Zero destructive commands or state changes are executed.**
-- **Action Mode**: Runs DDL drop statements, updates reservation configurations, or transitions incident statuses **only after explicit human verification and sign-off**.
+- **Zero Automated Mutations**: The agent **never** executes destructive commands (`bq rm`), alters billing configurations (`bq update`), or disables running pipelines directly.
+- **Decision Support & Artifacts**: The agent investigates recency, analyzes lineage and downstream impact, provides clear cost/risk trade-offs, and generates whatever review artifacts the human operator requests (Markdown review tables, CSV candidate exports, or standalone shell scripts with dry-run commands for the user to inspect and run).
+
+---
+
+## Slash Commands
+
+When installed in Claude Code or Antigravity, quick slash commands are available:
+
+- `/triage` — Launch real-time incident triaging, upstream lineage inspection, and blast-radius analysis across monitored GCP projects.
+- `/savings` — Audit BigQuery storage and compute waste across tables, datasets, data models, and pipelines.
 
 ---
 
@@ -29,7 +38,7 @@ All skills adhere to strict human-in-the-loop safety controls:
 
 ### 1. Claude Code
 
-Add the Masthead plugin marketplace and install:
+Add the Masthead marketplace and install the plugin:
 
 ```text
 /plugin marketplace add masthead-data/for-agents
@@ -37,24 +46,27 @@ Add the Masthead plugin marketplace and install:
 /reload-plugins
 ```
 
+For local development from a cloned repository:
+
+```bash
+claude plugin marketplace add ./
+claude plugin install masthead-agent-tools@masthead-data
+```
+
 ### 2. OpenAI Codex CLI
 
-Add the marketplace and install via Codex:
+Add the marketplace and install via Codex CLI:
 
 ```bash
 codex plugin marketplace add masthead-data/for-agents
+codex plugin add masthead-agent-tools@masthead-data
 ```
 
-Then inside Codex:
-
-```text
-/plugins
-# Select masthead-agent-tools and install
-```
+Or interactively inside Codex via `/plugins`.
 
 ### 3. Google Antigravity & Agent Plugins (1.0.0)
 
-This repository adheres to the vendor-neutral [Agent Plugins 1.0.0](https://agent-plugins.org) specification backed by Google, OpenAI, Microsoft, and Amazon.
+This repository adheres to the vendor-neutral [Agent Plugins 1.0.0](https://agent-plugins.org) specification.
 
 To add this plugin to Antigravity:
 

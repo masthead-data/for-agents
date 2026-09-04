@@ -40,7 +40,7 @@ Identify which orchestration technology is in use by querying available recommen
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT subtype, COUNT(*) AS recommendation_count
-FROM \`masthead-prod.YOUR_DATASET.insights\`
+FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND type = 'Compute costs'
 GROUP BY subtype"
@@ -50,25 +50,24 @@ If compute model recommendations are not present or all rows share the same tech
 
 ### Step 2: Pull Recommendations
 
-Pull recommendations from `masthead-prod.YOUR_DATASET.insights`:
+Pull recommendations from `masthead-prod.<DATASET_NAME>.insights`:
 
 Replace the `subtype` value with the one detected in step 1 (e.g. `'Re-assign reservation for Dataform models'`, `'Re-assign reservation for dbt models'`, or `'Re-assign reservation for Airflow DAGs'`).
 
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
-  JSON_VALUE(m, '$.model_id') AS action_name,
-  JSON_VALUE(op, '$.recommended_compute_model') AS recommended_model,
-  -- CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) AS cost_30d,
-  last_updated_time
-FROM \`masthead-prod.YOUR_DATASET.insights\`,
+  SAFE.STRING(m.model_id) AS action_name,
+  SAFE.STRING(op.recommended_compute_model) AS recommended_model,
+  SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
+  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d
+FROM \`masthead-prod.<DATASET_NAME>.insights\`,
   UNNEST(JSON_QUERY_ARRAY(operations)) AS op,
-  UNNEST(JSON_QUERY_ARRAY(op, '$.models')) AS m
+  UNNEST(JSON_QUERY_ARRAY(op.models)) AS m
 WHERE category = 'Cost'
   AND type = 'Compute costs'
   AND subtype = 'Re-assign reservation for Dataform models'
---ORDER BY cost_30d DESC
-"
+ORDER BY savings_usd_30d DESC"
 ```
 
 ### Step 3: Resolve Reservation Targets
@@ -110,15 +109,17 @@ Retrieve the final assignment mapping. The user or agent can choose the most opt
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
-  JSON_VALUE(m, '$.model_id') AS action_name,
-  JSON_VALUE(op, '$.recommended_compute_model') AS recommended_model
-FROM \`masthead-prod.YOUR_DATASET.insights\`,
+  STRING(m.model_id) AS action_name,
+  STRING(op.recommended_compute_model) AS recommended_model,
+  SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
+  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d
+FROM \`masthead-prod.<DATASET_NAME>.insights\`,
   UNNEST(JSON_QUERY_ARRAY(operations)) AS op,
-  UNNEST(JSON_QUERY_ARRAY(op, '$.models')) AS m
+  UNNEST(JSON_QUERY_ARRAY(op.models)) AS m
 WHERE category = 'Cost'
   AND type = 'Compute costs'
   AND subtype = 'Re-assign reservation for Dataform models'
-ORDER BY CAST(JSON_VALUE(overview, '$.cost_30d') AS FLOAT64) DESC"
+ORDER BY savings_usd_30d DESC"
 ```
 
 ### Step 5: Prepare Configuration Artifacts (User-Executed)

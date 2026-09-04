@@ -47,10 +47,10 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   target_resource,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
   SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.recommended_action') AS recommended_action,
-  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.current_billing_model') AS current_billing_model,
-  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.recommended_billing_model') AS recommended_billing_model
-FROM \`masthead-prod.YOUR_DATASET.insights\`
+  SAFE.STRING(operations[0].recommended_action) AS recommended_action,
+  SAFE.STRING(operations[0].current_billing_model) AS current_billing_model,
+  SAFE.STRING(operations[0].recommended_billing_model) AS recommended_billing_model
+FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND type = 'Storage costs'
   AND target_level = 'Dataset'

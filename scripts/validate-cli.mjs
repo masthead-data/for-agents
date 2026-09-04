@@ -56,7 +56,10 @@ if (hasBin('agy')) {
 if (hasBin('codex')) {
   checked++;
   console.log('--- Testing with OpenAI Codex CLI ---');
-  runCmd('Codex Marketplace & Plugin', 'codex plugin marketplace add . && codex plugin list | grep masthead-agent-tools');
+  runCmd(
+    'Codex Marketplace & Plugin',
+    'codex plugin marketplace add . && codex plugin list | grep masthead-agent-tools && test -f ~/.codex/plugins/cache/masthead-data/masthead-agent-tools/1.0.0/commands/triage.md && echo "✔ commands: triage.md verified in Codex cache"'
+  );
   console.log();
 } else {
   console.log('ℹ OpenAI Codex CLI not found in PATH (skipped)\n');
