@@ -1,0 +1,26 @@
+{
+  "name": "masthead-agent-tools",
+  "version": "1.0.0",
+  "description": "Masthead Agent Tools for BigQuery Data Observability and FinOps",
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/validate.mjs && npm run lint:md",
+    "validate": "node scripts/validate.mjs",
+    "validate:cli": "node scripts/validate-cli.mjs",
+    "validate:all": "npm run validate && npm run validate:cli",
+    "lint:md": "npx -y markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+    "lint:md:fix": "npx -y markdownlint-cli2 --fix \"**/*.md\" \"#node_modules\""
+  },
+  "keywords": [
+    "bigquery",
+    "data-observability",
+    "finops",
+    "agent-skills",
+    "claude-plugin",
+    "codex-plugin",
+    "antigravity",
+    "mcp"
+  ],
+  "author": "Masthead Data <team@mastheadata.com>",
+  "license": "Apache-2.0"
+}

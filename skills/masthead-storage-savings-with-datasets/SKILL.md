@@ -21,21 +21,21 @@ Reduce BigQuery storage costs by acting at the dataset level — switching stora
 
 Before switching a dataset to physical storage billing, drop unused/dead-end tables first. Physical billing includes costs for **time-travel and fail-safe storage**, so removing tables beforehand avoids paying for their retention. Run `masthead-storage-savings-with-tables` before this skill if you haven't already.
 
+## Operating Mode: Cautious Advisory (Non-Action)
+
+This skill operates strictly in an advisory capacity:
+
+- **Zero Automated Billing Changes**: The agent **never** runs `bq update --storage_billing_model` or alters dataset billing policies directly. BigQuery enforces a **14-day lock-in period** on storage billing model changes. All changes must be executed by the human operator.
+- **Agent Role**: Query insights, analyze compression ratios and savings, verify that dead-end tables have been dropped first (avoiding physical storage charges for time-travel), and prepare migration commands or review artifacts for human approval.
+
 ## Implementation Steps
 
-### Step 0: Configure Masthead Dataset
+### Step 0: Dataset Context
 
-1. Ask the user for the BigQuery dataset where Masthead insights are stored. This dataset must contain an `insights` table with the same schema as `masthead-prod.YOUR_DATASET.insights`. If the user does not have access, direct them to [request access](https://docs.mastheadata.com/api#get-access-to-bigquery-resources).
+Ensure access to your Masthead insights dataset in BigQuery:
 
-   Once provided, **immediately persist it** by appending to the project-level agent instructions file (e.g. `AGENTS.md`, `.github/copilot-instructions.md` — whichever already exists in the project root, or create `AGENTS.md` if none exist). Append inside `<!-- masthead -->` fences so existing content is not disturbed:
-
-   ```
-   <!-- masthead -->
-   MASTHEAD_DATASET=YOUR_DATASET
-   <!-- /masthead -->
-   ```
-
-   On subsequent runs, read this value from the instructions file instead of prompting the user again.
+- **Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (see [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md) and [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md)).
+- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache it per their preference (global `~/.masthead/config.json` recommended).
 
 ### Step 1: Query Dataset-Level Storage Recommendations
 
@@ -47,10 +47,10 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   target_resource,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
   SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.recommended_action') AS recommended_action,
-  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.current_billing_model') AS current_billing_model,
-  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.recommended_billing_model') AS recommended_billing_model
-FROM \`masthead-prod.YOUR_DATASET.insights\`
+  SAFE.STRING(operations[0].recommended_action) AS recommended_action,
+  SAFE.STRING(operations[0].current_billing_model) AS current_billing_model,
+  SAFE.STRING(operations[0].recommended_billing_model) AS recommended_billing_model
+FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND type = 'Storage costs'
   AND target_level = 'Dataset'
@@ -74,26 +74,22 @@ Review the retrieved list of candidates. The user or agent can choose the most o
 - Are there tables in this dataset that should be dropped first (see Important note above)?
 - Does the expiration policy align with data retention requirements?
 
-### Step 3: Apply Billing Model Changes
+### Step 3: Generate Migration Artifacts (User-Executed)
 
-For datasets marked `apply` with a billing model recommendation:
+The agent does **not** execute billing model changes. BigQuery enforces an irreversible **14-day lock-in** where a dataset cannot be transitioned back immediately, and physical storage billing immediately begins charging for 7-day time travel and 7-day fail-safe bytes.
+
+Generate the migration commands or documentation requested by the user for independent review and execution:
 
 ```bash
+# Generated for human operator review and execution:
 # Switch a dataset to physical billing
 bq update --storage_billing_model=PHYSICAL YOUR_PROJECT:YOUR_DATASET
 
-# Switch a dataset back to logical billing (if needed)
+# Switch a dataset back to logical billing (allowed only after 14-day lock-in period)
 bq update --storage_billing_model=LOGICAL YOUR_PROJECT:YOUR_DATASET
 ```
 
-For each dataset marked `apply`, run the appropriate command (to be executed by the user after review):
-
-```bash
-# Dry-run is not supported for billing model changes — review before executing
-bq update --storage_billing_model=PHYSICAL YOUR_PROJECT:YOUR_DATASET
-```
-
-**Note:** Billing model changes take effect immediately but cost impact is reflected in the next billing cycle. Wait at least 14 days before evaluating savings.
+**Note:** Billing model changes take effect immediately, but cost impact is reflected in the next billing cycle. Wait at least 14 days before evaluating savings.
 
 ### Step 4: Verify Changes
 

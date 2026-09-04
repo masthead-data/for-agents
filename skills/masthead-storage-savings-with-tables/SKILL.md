@@ -12,7 +12,7 @@ Identify and remove BigQuery tables that contribute to storage costs but have no
 
 ## Prerequisites
 
-- Verify the [Masthead Data integration ](https://docs.mastheadata.com/get-started/integrate-using-iac) is version **v0.2.7+** (required for accurate lineage data)
+- Verify the [Masthead Data integration](https://docs.mastheadata.com/get-started/integrate-using-iac) is version **v0.2.7+** (required for accurate lineage data).
 
 ## Table Categories
 
@@ -35,21 +35,21 @@ If a table is flagged `Unused` **and** has a recent `last_modified_time` in the 
 - Implementing regular storage hygiene
 - Investigating sudden storage cost increases
 
+## Operating Mode: Cautious Advisory (Non-Action)
+
+This skill operates strictly in an advisory capacity:
+
+- **Zero Automated Deletions**: The agent **never** executes `bq rm` or drops tables directly. All table deletions are reserved exclusively for the human operator.
+- **Agent Role**: Query insights, investigate table recency and lineage, formulate clear argumentation with cost/risk trade-offs, and generate whatever review or execution artifacts the user requests (e.g., Markdown review tables, CSV exports, or standalone shell scripts with dry-run commands for the user to inspect and run independently).
+
 ## Implementation Steps
 
-### Step 0: Configure Masthead Dataset
+### Step 0: Dataset Context
 
-1. Ask the user for the BigQuery dataset where Masthead insights are stored. This dataset must contain an `insights` table with the same schema as `masthead-prod.YOUR_DATASET.insights`. If the user does not have access, direct them to [request access](https://docs.mastheadata.com/api#get-access-to-bigquery-resources).
+Ensure access to your Masthead insights dataset in BigQuery:
 
-   Once provided, **immediately persist it** by appending to the project-level agent instructions file (e.g. `AGENTS.md`, `.github/copilot-instructions.md` — whichever already exists in the project root, or create `AGENTS.md` if none exist). Append inside `<!-- masthead -->` fences so existing content is not disturbed:
-
-   ```
-   <!-- masthead -->
-   MASTHEAD_DATASET=YOUR_DATASET
-   <!-- /masthead -->
-   ```
-
-   On subsequent runs, read this value from the instructions file instead of prompting the user again.
+- **Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (see [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md) and [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md)).
+- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache it per their preference (global `~/.masthead/config.json` recommended).
 
 ### Step 1: Query Storage Waste
 
@@ -59,12 +59,12 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   subtype,
   project_id,
   target_resource,
-  JSON_VALUE(JSON_QUERY_ARRAY(operations)[OFFSET(0)], '$.resource_type') AS resource_type,
+  SAFE.STRING(operations[0].resource_type) AS resource_type,
   SAFE.INT64(overview.num_bytes) / POW(1024, 4) AS total_tib,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
   SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  SAFE.TIMESTAMP(JSON_VALUE(overview, '$.last_modified_time')) AS last_modified_time
-FROM \`masthead-prod.YOUR_DATASET.insights\`
+  SAFE.TIMESTAMP(SAFE.STRING(overview.last_modified_time)) AS last_modified_time
+FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND subtype IN ('Dead end table', 'Leaf dead end table', 'Unused table')
   AND overview.num_bytes IS NOT NULL
@@ -88,18 +88,18 @@ Review the retrieved list of candidates. The user or agent can choose the most o
 - Is this table part of an active experiment or migration?
 - **For repo-managed projects:** Search the codebase (e.g., `grep` for table name in model definitions, scripts) to confirm ownership. Table naming can be misleading (e.g. may seem like current outputs but could be legacy).
 - **Disable producers:** if there is a related pipeline code - it needs to be disabled to avoid regenerating the table after dropping.
+- **Inspect Live Metadata**: For ambiguous or high-value candidates, run the CLI equivalent of `table_get` to verify live row count, total bytes, labels, and exact `lastModifiedTime`:
 
-### Step 3: Drop Approved Tables
+  ```bash
+  bq show --format=prettyjson YOUR_PROJECT:YOUR_DATASET.YOUR_TABLE
+  ```
 
-For each table marked `to drop`, run:
+### Step 3: Generate Remediation Artifacts (User-Executed)
 
-```bash
-# Dry-run first (to be executed by the user)
-bq rm --dry-run -f -t YOUR_PROJECT:YOUR_DATASET.YOUR_TABLE
+The agent does **not** execute drop commands. Instead, generate the remediation artifacts requested by the user for independent review and execution:
 
-# Execute after review (to be executed by the user)
-bq rm -f -t YOUR_PROJECT:YOUR_DATASET.YOUR_TABLE
-```
+1. **Review Artifacts**: Provide a clear Markdown summary or CSV candidate list with table sizes, 30-day savings, and last modified dates.
+2. **Execution Script**: When requested, prepare a standalone shell script that inspects live table metadata before taking actions.
 
 ### Step 4: Verify Savings
 
