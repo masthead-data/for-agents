@@ -32,32 +32,31 @@ This skill operates strictly in an advisory capacity:
 
 ### Step 0: Dataset Context
 
-Ensure access to your Masthead insights dataset in BigQuery:
+Resolve the Masthead insights dataset before querying. It always lives in the `masthead-prod` project; only the dataset name is per-tenant.
 
-- **Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (see [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md) and [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md)).
-- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache it per their preference (global `~/.masthead/config.json` recommended).
+1. **Masthead MCP connected** (preferred): call `get_tenant_settings`. Use `insightsDataset.project` + `insightsDataset.dataset` as `<DATASET_NAME>` (for example `masthead-prod.mastheadata`). If `insightsDataset.enabled` is `false`, stop and tell the user BigQuery export is not enabled for their tenant ([request access](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)). Cache the dataset in `~/.masthead/config.json` (or `.masthead/config.json` per the user's preference).
+2. **No MCP**: check `$MASTHEAD_INSIGHTS_DATASET`, then global `~/.masthead/config.json`, then local `.masthead/config.json`. If none is set, ask the user once and cache it.
+
+`YOUR_PROJECT` in the commands below is the **user's own GCP project** that bills and authorizes the `bq` jobs (`gcloud config get-value project`) — never `masthead-prod`, customers cannot run jobs there. Reference: [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md), [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md).
 
 ### Step 1: Query Dataset-Level Storage Recommendations
 
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
-  subtype,
-  project_id,
-  target_resource,
+  target_resource AS dataset,
+  SAFE.STRING(overview.location) AS location,
+  SAFE.STRING(overview.storage_billing_model) AS current_billing_model,
+  SAFE.STRING(operations[0].recommended_storage_billing_model) AS recommended_billing_model,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
-  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  SAFE.STRING(operations[0].recommended_action) AS recommended_action,
-  SAFE.STRING(operations[0].current_billing_model) AS current_billing_model,
-  SAFE.STRING(operations[0].recommended_billing_model) AS recommended_billing_model
+  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d
 FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
-  AND type = 'Storage costs'
-  AND target_level = 'Dataset'
+  AND type = 'Storage billing model'
 ORDER BY savings_usd_30d DESC"
 ```
 
-**Note:** `savings_30d` is the primary ranking signal. Review `recommended_action` to understand what Masthead is suggesting per dataset.
+**Note:** `savings_30d` is the primary ranking signal. Every row is an `alter` recommendation from `current_billing_model` to `recommended_billing_model` (`LOGICAL` ↔ `PHYSICAL`). Masthead does not emit expiration-policy insights; apply expiration policies from your own retention rules (Step 3).
 
 ### Step 2: Review Candidates
 
