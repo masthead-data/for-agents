@@ -6,7 +6,14 @@ When `operations` contains a `RESERVATION_CONFIG` action with `principals` (inst
 
 ---
 
-## 1. Native BigQuery SQL Principal Assignment (Recommended)
+> [!IMPORTANT]
+> **Execution Hierarchy: SQL DDL First**:
+> Always use native **BigQuery SQL DDL** (`CREATE ASSIGNMENT`, `DROP ASSIGNMENT`, `SET @@reservation`) as the primary execution method for routing principal workloads.
+> The `bq` CLI commands (`bq mk/rm --reservation_assignment`) are provided **only as an alternative fallback** when SQL DDL execution is unavailable.
+
+---
+
+## 1. Native BigQuery SQL Principal Assignment (Primary - Recommended)
 
 BigQuery natively supports assigning reservations directly to specific principals within a project using SQL DDL.
 Documentation: [BigQuery SQL CREATE ASSIGNMENT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) | [BigQuery SQL DROP ASSIGNMENT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment)
@@ -46,7 +53,51 @@ DROP ASSIGNMENT `ADMIN_PROJECT.region-LOCATION.RESERVATION_ID.ASSIGNMENT_NAME`;
 
 ---
 
-## 2. Source Project & Principal Assignment via `bq` CLI
+## 2. Session / Job-Level Reservation Assignment (SQL Variable)
+
+When principals share a multi-tenant project and only specific script runs or queries should be routed:
+
+### BigQuery Session SQL Variable
+Documentation: [BigQuery System Variables](https://cloud.google.com/bigquery/docs/reference/standard-sql/system-variables)
+
+Configure the script, notebook, or application session:
+
+```sql
+SET @@reservation = 'projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID';
+```
+
+To reset to default / on-demand:
+
+```sql
+SET @@reservation = NULL;
+```
+
+### Client Library & BI Tool Configuration
+
+In database connections (Looker, Metabase, Tableau, Python BigQuery Client):
+
+- Configure connection property: `default_query_reservation = projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID`
+- Or pass `configuration.query.reservation` on the job configuration when submitting query jobs.
+
+---
+
+## 3. Declarative IaC: Google Terraform Resource
+
+Documentation: [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment)
+
+To manage workload assignments declaratively via Terraform:
+
+```hcl
+resource "google_bigquery_reservation_assignment" "query_assignment" {
+  assignee    = "projects/SOURCE_PROJECT"
+  job_type    = "QUERY"
+  reservation = google_bigquery_reservation.reservation.id
+}
+```
+
+---
+
+## 4. Alternative CLI Fallback: `bq` CLI *(Use only if SQL DDL is unavailable)*
 
 Documentation: [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) | [`bq rm --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_rm) | [`bq ls --reservation_assignments`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_ls)
 
@@ -93,49 +144,9 @@ bq rm --reservation_assignment \
 
 ---
 
-## 3. Google Terraform Resource (`google_bigquery_reservation_assignment`)
+## 5. Pre-Requisite Permissions (`ALLOW_FLEXIBLE_ASSIGNMENT`)
 
-Documentation: [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment)
+Ensure every principal in the recommendation has been granted `roles/bigquery.resourceEditor` (which provides `bigquery.reservations.use`) on the target reservation resource.
 
-To manage workload assignments declaratively via Terraform:
-
-```hcl
-resource "google_bigquery_reservation_assignment" "query_assignment" {
-  assignee    = "projects/SOURCE_PROJECT"
-  job_type    = "QUERY"
-  reservation = google_bigquery_reservation.reservation.id
-}
-```
-
----
-
-## 4. Session / Job-Level Reservation Assignment
-
-When principals share a multi-tenant project and only specific script runs or queries should be routed:
-
-### BigQuery Session SQL Variable
-
-Configure the script, notebook, or application session:
-
-```sql
-SET @@reservation = 'projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID';
-```
-
-To reset to default / on-demand:
-
-```sql
-SET @@reservation = NULL;
-```
-
-### Client Library & BI Tool Configuration
-
-In database connections (Looker, Metabase, Tableau, Python BigQuery Client):
-
-- Configure connection property: `default_query_reservation = projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID`
-- Or pass `configuration.query.reservation` on the job configuration when submitting query jobs.
-
----
-
-## 5. Pre-Requisite Permissions
-
-Ensure every principal in the recommendation has been granted `roles/bigquery.resourceEditor` (which provides `bigquery.reservations.use`) on the target reservation resource (see [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment)). Without this IAM binding, query jobs targeting the reservation will fail with permission denied errors.
+> [!NOTE]
+> Because BigQuery does **not** have SQL DDL for reservation IAM, this permission must be granted using the `bq` CLI (`bq get/set-iam-policy --reservation`) or Terraform (`google_bigquery_reservation_iam_member`). See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment). Without this IAM binding, query jobs targeting the reservation will fail with permission denied errors.
