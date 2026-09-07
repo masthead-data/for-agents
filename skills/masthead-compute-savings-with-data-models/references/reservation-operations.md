@@ -185,23 +185,29 @@ bq query \
 Grants listed service accounts or user identities permission to route jobs directly to the specific reservation (`bigquery.reservations.use`).
 
 > [!IMPORTANT]
-> **No SQL DDL Available**: BigQuery standard SQL does not support `GRANT` or `REVOKE` statements on reservation resources. To avoid granting project-wide reservation access, apply IAM bindings directly to the **reservation resource itself** using declarative Terraform or the `bq` CLI (`--reservation`).
+> **No Reservation SQL DDL or Dedicated Terraform IAM Resource**: BigQuery standard SQL does not support `GRANT` or `REVOKE` statements on reservation resources, and the Google Terraform provider does not include a dedicated `bigquery_reservation_iam` resource. To avoid granting project-wide reservation access, apply IAM bindings directly to the **reservation resource itself** using the `bq` CLI (`--reservation`) or declare a scoped [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) with an IAM condition in Terraform.
 
 - **Target Resource**: `ADMIN_PROJECT:LOCATION.RESERVATION_ID`
 - **Role**: `roles/bigquery.resourceEditor` (supported least-privilege predefined role on reservations providing `bigquery.reservations.use`)
-- **Terraform Resource**: [`google_bigquery_reservation_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_iam#google_bigquery_reservation_iam_member)
+- **Terraform Resource**: [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) (with IAM condition scoping `resource.name` to the reservation)
 - **CLI Commands**: [`bq get-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_get-iam-policy) and [`bq set-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) with `--reservation`.
 
 ### 1. Google Terraform Resource
-Documentation: [`google_bigquery_reservation_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_iam#google_bigquery_reservation_iam_member)
+Documentation: [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member)
+
+Because the Google provider does not provide a dedicated reservation IAM resource, declare scoped access at the project level using an IAM condition:
 
 ```hcl
-resource "google_bigquery_reservation_iam_member" "flexible_assignment" {
-  project     = "ADMIN_PROJECT"
-  location    = "LOCATION"
-  reservation = google_bigquery_reservation.reservation.name
-  role        = "roles/bigquery.resourceEditor"
-  member      = "serviceAccount:runner-sa@PROJECT.iam.gserviceaccount.com"
+resource "google_project_iam_member" "flexible_assignment" {
+  project = "ADMIN_PROJECT"
+  role    = "roles/bigquery.resourceEditor"
+  member  = "serviceAccount:runner-sa@PROJECT.iam.gserviceaccount.com"
+
+  condition {
+    title       = "reservation_scoped_access"
+    description = "Scope resourceEditor to target reservation"
+    expression  = "resource.name == 'projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID'"
+  }
 }
 ```
 

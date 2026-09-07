@@ -28,7 +28,7 @@ Any action that applies BigQuery recommendations (e.g., pausing/disabling pipeli
 
 When guiding and describing examples in skills markdown, structure BigQuery implementation patterns according to the following precedence:
 1. **Native BigQuery SQL DDL** (`CREATE/ALTER RESERVATION`, `ALTER PROJECT SET OPTIONS`, `CREATE/DROP ASSIGNMENT`, `SET @@reservation`). Native SQL is standardized, portable across tools and drivers, and provides transparent auditability.
-2. **Terraform (Google Provider Resources)** (`hashicorp/google` resources such as `google_bigquery_reservation`, `google_bigquery_reservation_assignment`, `google_bigquery_reservation_iam_member`). Provide declarative Terraform configurations for enterprise infrastructure management.
+2. **Terraform (Google Provider Resources)** (`hashicorp/google` resources such as `google_bigquery_reservation`, `google_bigquery_reservation_assignment`, `google_project_iam_member`). Provide declarative Terraform configurations for enterprise infrastructure management.
 3. **`bq` CLI** (`bq mk`, `bq update`, `bq rm`, `bq set-iam-policy`). Use `bq` only when SQL DDL is not available (e.g. reservation-scoped IAM policies where BigQuery SQL lacks `GRANT` syntax) or as a secondary command-line fallback when direct SQL or Terraform execution is not viable.
 
 > [!NOTE]
