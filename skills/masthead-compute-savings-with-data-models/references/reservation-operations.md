@@ -19,6 +19,7 @@ Triggered when the recommendation establishes a new reservation for an unreserve
 - **Edition**: Set `edition` (`STANDARD`, `ENTERPRISE`, or `ENTERPRISE_PLUS`) from the operation.
 
 ### 1. BigQuery SQL DDL
+
 Documentation: [BigQuery SQL CREATE RESERVATION](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_reservation)
 
 ```sql
@@ -32,6 +33,7 @@ OPTIONS (
 ```
 
 ### 2. Google Terraform Resource
+
 Documentation: [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation)
 
 ```hcl
@@ -50,6 +52,7 @@ resource "google_bigquery_reservation" "reservation" {
 ```
 
 ### 3. `bq` CLI (`bq mk`)
+
 *Use `bq` only when SQL DDL or Terraform execution is not available.*
 Documentation: [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk)
 
@@ -76,6 +79,7 @@ Triggered when resizing or modifying an existing reservation.
 - **Rollback Tracking**: Note `prev_max_reservation_size` in your proposal summary so the operator can roll back if needed.
 
 ### 1. BigQuery SQL DDL
+
 Documentation: [BigQuery SQL ALTER RESERVATION](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_reservation)
 
 ```sql
@@ -84,6 +88,7 @@ SET OPTIONS (autoscale_max_slots = 400);
 ```
 
 ### 2. Google Terraform Resource
+
 Documentation: [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation)
 
 ```hcl
@@ -96,6 +101,7 @@ resource "google_bigquery_reservation" "reservation" {
 ```
 
 ### 3. `bq` CLI (`bq update`)
+
 *Use `bq` only when SQL DDL or Terraform execution is not available.*
 Documentation: [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update)
 
@@ -118,6 +124,7 @@ Configures the BigQuery admin project to allow fluid autoscaling across reservat
 > **Append Only**: Always inspect the existing project configuration first. Append the new reservation ID to the existing list—**never overwrite** the array, or other reservations in the project will lose fluid autoscaling.
 
 ### 1. BigQuery SQL DDL
+
 Documentation: [BigQuery SQL ALTER PROJECT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_project)
 
 ```sql
@@ -138,6 +145,7 @@ SET OPTIONS (
 ```
 
 ### 2. Terraform Pattern
+
 Documentation: [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) / [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation)
 
 Because project-level BigQuery options are governed via SQL DDL, maintain them in Terraform using a `terraform_data` provisioner that tracks reservation definitions:
@@ -167,6 +175,7 @@ resource "terraform_data" "fluid_autoscaling_config" {
 ```
 
 ### 3. `bq` CLI (`bq query`)
+
 *Use `bq` only when running SQL DDL directly via CLI.*
 Documentation: [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query)
 
@@ -193,6 +202,7 @@ Grants listed service accounts or user identities permission to route jobs direc
 - **CLI Commands**: [`bq get-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_get-iam-policy) and [`bq set-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) with `--reservation`.
 
 ### 1. Google Terraform Resource
+
 Documentation: [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member)
 
 Because the Google provider does not provide a dedicated reservation IAM resource, declare scoped access at the project level using an IAM condition:
@@ -212,9 +222,11 @@ resource "google_project_iam_member" "flexible_assignment" {
 ```
 
 ### 2. `bq` CLI (`bq get-iam-policy` / `bq set-iam-policy`)
+
 *Used when Terraform is not managing IAM bindings.*
 
 #### Step 1: Export Current Policy
+
 Documentation: [`bq get-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_get-iam-policy)
 
 ```bash
@@ -226,6 +238,7 @@ bq get-iam-policy \
 ```
 
 #### Step 2: Add Principal Binding
+
 Update `/tmp/policy.json` to grant `roles/bigquery.resourceEditor` to the listed principals using `jq`:
 
 ```bash
@@ -248,6 +261,7 @@ jq '
 ```
 
 #### Step 3: Apply Updated Policy to Reservation
+
 Documentation: [`bq set-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy)
 
 ```bash

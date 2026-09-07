@@ -15,12 +15,14 @@ The primary objective is **reliable enterprise workload cost optimization withou
 ## Workload Scope
 
 Masthead evaluates two classes of compute recommendations:
+
 1. **Data Models (`DAG_MODEL`)**: Orchestrated pipeline nodes across Dataform actions, dbt models, and Airflow tasks.
 2. **Principals (`PRINCIPAL`)**: Identity-based workloads executed by service accounts or users across projects.
 
 ## Operating Mode: Cautious Advisory (Non-Action)
 
 This skill operates strictly in an advisory capacity:
+
 - **Zero Automated In-Place Mutation**: The agent **never** creates/alters BigQuery reservations, grants IAM permissions, or modifies repository configuration files (`definitions/_reservations.js`, `dbt_project.yml`, `reservations_config.json`) without explicit human review and approval.
 - **Agent Role**: Query insights, evaluate simulation reliability caveats, calculate trade-offs, verify reservation capacity, and prepare exact SQL commands, configuration diffs, and validation checks for human review.
 
@@ -31,6 +33,7 @@ This skill operates strictly in an advisory capacity:
 ### Step 0: Dataset Context & Target Resolution
 
 Ensure access to the Masthead insights dataset in BigQuery:
+
 - **Table Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (e.g. `masthead-prod.hkm.insights`, `masthead-prod.realtruck.insights`).
 - **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache per preference.
 
@@ -63,6 +66,7 @@ ORDER BY savings_30d DESC"
 ```
 
 #### Row Contract & Rules
+
 - **Alternative End-States**: Each row is an independently simulated plan for a workload group. **Rows whose operations touch the same reservation are mutually exclusive alternative end-states, not composable steps.** Select the row yielding the highest verified savings and skip alternatives.
 - **Negative Savings**: Discard any row where `savings_30d <= 0` (the simulated setup costs *more* than the status quo).
 - **Recalculation Freshness**: Check `last_updated_time`. Rows are regenerated periodically; re-verify before finalizing a proposal.
@@ -88,7 +92,7 @@ To ensure reliable optimization with **zero performance degradation**, evaluate 
 
 The `operations` array contains atomic actions in their strict execution order:
 
-```
+```text
 1. CREATE_RESERVATION / ALTER_RESERVATION
    └── 2. ENABLE_FLUID_AUTOSCALING
        └── 3. ALLOW_FLEXIBLE_ASSIGNMENT
@@ -108,11 +112,12 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
 | `CREATE_RESERVATION` | [`CREATE RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_reservation) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) *(when SQL/TF unavailable)* | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#1-create_reservation) |
 | `ALTER_RESERVATION` | [`ALTER RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_reservation) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update) *(when SQL/TF unavailable)* | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#2-alter_reservation) |
 | `ENABLE_FLUID_AUTOSCALING` | [`ALTER PROJECT SET OPTIONS`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_project) | [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) (executes SQL) | [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query) (executes SQL) | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#3-enable_fluid_autoscaling) |
-| `ALLOW_FLEXIBLE_ASSIGNMENT`| *N/A (No SQL DDL for reservation IAM)* | [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) *(with IAM condition)* | [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment) |
+| `ALLOW_FLEXIBLE_ASSIGNMENT` | *N/A (No SQL DDL for reservation IAM)* | [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) *(with IAM condition)* | [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment) |
 | `RESERVATION_CONFIG` (`PRINCIPAL`) | [`CREATE ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) / [`DROP ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment) | [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment) | [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) *(when SQL/TF unavailable)* | [principal-routing.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/principal-routing.md) |
 | `RESERVATION_CONFIG` (`DAG_MODEL`) | Orchestration packages | Dataform / dbt / Airflow package config | *N/A* | [orchestration-templates.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/orchestration-templates.md) |
 
 ### 1. Reservation Configuration (`CREATE_RESERVATION` / `ALTER_RESERVATION`)
+
 - **Baseline Capacity**: Always set `slot_capacity = 0` (autoscale-only for cost efficiency).
 - **Max Autoscaling**: Set `autoscale_max_slots` from the recommendation.
 - **Implementation Hierarchy**:
@@ -122,6 +127,7 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
 - **Details & Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#1-create_reservation).
 
 ### 2. Fluid Autoscaling (`ENABLE_FLUID_AUTOSCALING`)
+
 - Project-level setting enabling dynamic slot sharing.
 - **Append Only**: Always append the reservation ID to `region-<location>.preflight_fluid_autoscaling_reservations`—**never overwrite** existing entries.
 - **Implementation Hierarchy**:
@@ -131,6 +137,7 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
 - **Details & SQL Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#3-enable_fluid_autoscaling).
 
 ### 3. Permissions (`ALLOW_FLEXIBLE_ASSIGNMENT`)
+
 - Grants `roles/bigquery.resourceEditor` (least-privilege predefined role providing `bigquery.reservations.use`) on the target reservation resource to each identity in `principals`.
 - **Implementation Hierarchy** *(Note: BigQuery does not support SQL DDL for reservation-scoped IAM; the Terraform provider does not include a dedicated reservation IAM resource)*:
   1. **Terraform**: Declarative resource [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) with an IAM condition restricting `resource.name` to the specific reservation.
@@ -138,7 +145,9 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
 - **Details & Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment).
 
 ### 4. Workload Routing (`RESERVATION_CONFIG`)
+
 Routes target workloads to the designated reservation or on-demand (`"none"`):
+
 - **For Data Models (`DAG_MODEL`)**: Implement using Masthead's open-source packages. Never hand-edit individual operator files.
   - **Dataform**: Configure `definitions/_reservations.js` via `@masthead-data/dataform-package`.
   - **dbt**: Configure `dbt_project.yml` via `masthead-data/bq_reservations`.
@@ -157,6 +166,7 @@ Routes target workloads to the designated reservation or on-demand (`"none"`):
 Before submitting configuration diffs or marking proposals complete, perform the following validation checks:
 
 ### 1. Verify Capacity & Editions
+
 ```bash
 bq query --project_id=ADMIN_PROJECT --location=LOCATION --nouse_legacy_sql --format=pretty \
 "SELECT
@@ -170,6 +180,7 @@ ORDER BY project_id, reservation_name"
 ```
 
 ### 2. Validate Assignment Uniqueness & Syntax
+
 - **No Duplicate Routing**: Each Dataform action, dbt model, Airflow task, or principal must appear in **exactly one** reservation target (`RESERVATION_CONFIG` group).
 - **Compile Validation**:
   - Dataform: `dataform compile`

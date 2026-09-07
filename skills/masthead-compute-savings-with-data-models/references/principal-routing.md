@@ -58,6 +58,7 @@ DROP ASSIGNMENT `ADMIN_PROJECT.region-LOCATION.RESERVATION_ID.ASSIGNMENT_NAME`;
 When principals share a multi-tenant project and only specific script runs or queries should be routed:
 
 ### BigQuery Session SQL Variable
+
 Documentation: [BigQuery System Variables](https://cloud.google.com/bigquery/docs/reference/standard-sql/system-variables)
 
 Configure the script, notebook, or application session:

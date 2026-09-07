@@ -18,7 +18,9 @@ When `reservation` is `"none"`, the listed models must execute on **on-demand co
 **Package**: [`@masthead-data/dataform-package`](https://github.com/masthead-data/dataform-package)
 
 ### Step 1: Add Package Dependency
+
 In `package.json`:
+
 ```json
 {
   "dependencies": {
@@ -28,6 +30,7 @@ In `package.json`:
 ```
 
 ### Step 2: Configure `definitions/_reservations.js`
+
 Create or update `definitions/_reservations.js` (prefixed with `_` so it executes first in Dataform's compilation queue):
 
 ```javascript
@@ -53,6 +56,7 @@ autoAssignActions(RESERVATION_CONFIG);
 ```
 
 ### Step 3: Validate
+
 ```bash
 dataform compile
 ```
@@ -64,19 +68,25 @@ dataform compile
 **Package**: [`masthead-data/bq_reservations`](https://github.com/masthead-data/dbt-reservations)
 
 ### Step 1: Add Package Dependency
+
 In `packages.yml`:
+
 ```yaml
 packages:
   - package: masthead-data/bq_reservations
     version: 0.1.0 # Use latest version from dbt hub
 ```
+
 Then install dependencies:
+
 ```bash
 dbt deps
 ```
 
 ### Step 2: Configure Root Model Settings
+
 In root `dbt_project.yml` under `models:` (or in shared project configs):
+
 ```yaml
 models:
   your_project:
@@ -84,7 +94,9 @@ models:
 ```
 
 ### Step 3: Add `RESERVATION_CONFIG` Variable
+
 In `dbt_project.yml`:
+
 ```yaml
 vars:
   RESERVATION_CONFIG:
@@ -98,6 +110,7 @@ vars:
 ```
 
 ### Step 4: Validate
+
 ```bash
 dbt compile
 ```
@@ -109,12 +122,15 @@ dbt compile
 **Package**: [`airflow-reservations`](https://github.com/masthead-data/airflow-reservations)
 
 ### Step 1: Add Package Dependency
+
 In `requirements.txt`:
+
 ```text
 airflow-reservations>=0.1.0
 ```
 
 ### Step 2: Configure `reservations_config.json`
+
 Create or update `reservations_config.json` in the root of your `dags/` folder. Models in the recommendation map directly to `dag_id.task_id`:
 
 ```json
