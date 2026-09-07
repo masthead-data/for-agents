@@ -13,7 +13,7 @@ When `operations` contains a `RESERVATION_CONFIG` action with `principals` (inst
 
 ---
 
-## 1. Native BigQuery SQL Principal Assignment (Primary)
+## 1. BigQuery SQL DDL Principal Assignment
 
 BigQuery natively supports assigning reservations directly to specific principals within a project using SQL DDL.
 Documentation: [BigQuery SQL CREATE ASSIGNMENT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) | [BigQuery SQL DROP ASSIGNMENT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment)
@@ -81,7 +81,7 @@ In database connections (Looker, Metabase, Tableau, Python BigQuery Client):
 
 ---
 
-## 3. Google Terraform Resource (Declarative IaC)
+## 3. Google Terraform Resource
 
 Documentation: [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment)
 
@@ -97,7 +97,7 @@ resource "google_bigquery_reservation_assignment" "query_assignment" {
 
 ---
 
-## 4. Alternative CLI Fallback: `bq` CLI
+## 4. `bq` CLI
 
 *Use `bq` commands only when native SQL DDL or declarative Terraform is not available.*
 Documentation: [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) | [`bq rm --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_rm) | [`bq ls --reservation_assignments`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_ls)
