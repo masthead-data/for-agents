@@ -28,6 +28,8 @@ The look-back window is the tenant's `dataUsageLookBackDays` from `get_tenant_se
 
 **Pattern parents:** `target_resource` may be a wildcard such as `project.dataset.events_*` — Masthead collapses date-sharded siblings into one row whose `num_bytes`, `cost_30d`, and `savings_30d` are summed over the children. `bq rm` does not expand wildcards; see Step 3 for how to list the real tables.
 
+**Linked (Analytics Hub) datasets:** a row with `cost_30d` and `savings_30d` both NULL but a large `num_bytes` is usually a table in a dataset your project *subscribes* to, not one it owns — the storage is billed to the publisher and you cannot drop its tables. Confirm with `bq show --format=prettyjson YOUR_PROJECT:YOUR_DATASET` (a `linkedDatasetSource` block means linked) and classify it `keep`; the only possible action is unsubscribing from the listing, which is outside this skill.
+
 ### Key Signal
 
 If a table is flagged `Unused` **and** has a recent `last_modified_time` in the query output (i.e. the actual BigQuery table was recently written to), something outside Masthead's lineage visibility is writing to it — for example a manual job or external pipeline. `last_modified_time` here is the **referenced table's** BigQuery metadata timestamp, not the insights record update time. This always warrants investigation before dropping.
