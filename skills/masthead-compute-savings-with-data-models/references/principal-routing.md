@@ -8,12 +8,12 @@ When `operations` contains a `RESERVATION_CONFIG` action with `principals` (inst
 
 > [!IMPORTANT]
 > **Execution Hierarchy: SQL DDL First**:
-> Always use native **BigQuery SQL DDL** (`CREATE ASSIGNMENT`, `DROP ASSIGNMENT`, `SET @@reservation`) as the primary execution method for routing principal workloads.
-> The `bq` CLI commands (`bq mk/rm --reservation_assignment`) are provided **only as an alternative fallback** when SQL DDL execution is unavailable.
+> Always use native **BigQuery SQL** (`CREATE ASSIGNMENT`, `DROP ASSIGNMENT`, `SET @@reservation`) as the primary execution method for routing principal workloads. Declarative Terraform is standard for infrastructure as code.
+> The `bq` CLI commands (`bq mk/rm --reservation_assignment`) are provided **only as an alternative fallback** when SQL DDL or Terraform execution is unavailable.
 
 ---
 
-## 1. Native BigQuery SQL Principal Assignment (Primary - Recommended)
+## 1. Native BigQuery SQL Principal Assignment (Primary)
 
 BigQuery natively supports assigning reservations directly to specific principals within a project using SQL DDL.
 Documentation: [BigQuery SQL CREATE ASSIGNMENT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) | [BigQuery SQL DROP ASSIGNMENT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment)
@@ -81,7 +81,7 @@ In database connections (Looker, Metabase, Tableau, Python BigQuery Client):
 
 ---
 
-## 3. Declarative IaC: Google Terraform Resource
+## 3. Google Terraform Resource (Declarative IaC)
 
 Documentation: [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment)
 
@@ -97,8 +97,9 @@ resource "google_bigquery_reservation_assignment" "query_assignment" {
 
 ---
 
-## 4. Alternative CLI Fallback: `bq` CLI *(Use only if SQL DDL is unavailable)*
+## 4. Alternative CLI Fallback: `bq` CLI
 
+*Use `bq` commands only when native SQL DDL or declarative Terraform is not available.*
 Documentation: [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) | [`bq rm --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_rm) | [`bq ls --reservation_assignments`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_ls)
 
 ### Assign Project or Specific Principal to Reservation
@@ -149,4 +150,4 @@ bq rm --reservation_assignment \
 Ensure every principal in the recommendation has been granted `roles/bigquery.resourceEditor` (which provides `bigquery.reservations.use`) on the target reservation resource.
 
 > [!NOTE]
-> Because BigQuery does **not** have SQL DDL for reservation IAM, this permission must be granted using the `bq` CLI (`bq get/set-iam-policy --reservation`) or Terraform (`google_bigquery_reservation_iam_member`). See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment). Without this IAM binding, query jobs targeting the reservation will fail with permission denied errors.
+> Because BigQuery standard SQL does **not** support `GRANT` statements on reservation resources, this permission must be granted using declarative Terraform (`google_bigquery_reservation_iam_member`) or the `bq` CLI fallback (`bq get/set-iam-policy --reservation`). See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment). Without this IAM binding, query jobs targeting the reservation will fail with permission denied errors.

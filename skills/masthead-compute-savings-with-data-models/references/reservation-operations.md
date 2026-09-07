@@ -18,7 +18,7 @@ Triggered when the recommendation establishes a new reservation for an unreserve
 - **Max Autoscaling**: Set `autoscale_max_slots` to the exact value from the operation.
 - **Edition**: Set `edition` (`STANDARD`, `ENTERPRISE`, or `ENTERPRISE_PLUS`) from the operation.
 
-### Primary Method: Native BigQuery SQL DDL
+### 1. BigQuery SQL DDL (Primary)
 Documentation: [BigQuery SQL CREATE RESERVATION](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_reservation)
 
 ```sql
@@ -31,7 +31,7 @@ OPTIONS (
 );
 ```
 
-### Declarative IaC: Google Terraform Resource
+### 2. Google Terraform Resource (Declarative IaC)
 Documentation: [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation)
 
 ```hcl
@@ -49,7 +49,8 @@ resource "google_bigquery_reservation" "reservation" {
 }
 ```
 
-### Alternative CLI Fallback: `bq mk` *(Use only if SQL DDL execution is unavailable)*
+### 3. CLI Fallback (`bq mk`)
+*Use `bq` only when SQL DDL or Terraform execution is not available.*
 Documentation: [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk)
 
 ```bash
@@ -74,7 +75,7 @@ Triggered when resizing or modifying an existing reservation.
 - **Selective Update**: Only modify options that have changed (`autoscale_max_slots` and `edition` if updated).
 - **Rollback Tracking**: Note `prev_max_reservation_size` in your proposal summary so the operator can roll back if needed.
 
-### Primary Method: Native BigQuery SQL DDL
+### 1. BigQuery SQL DDL (Primary)
 Documentation: [BigQuery SQL ALTER RESERVATION](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_reservation)
 
 ```sql
@@ -82,7 +83,7 @@ ALTER RESERVATION `ADMIN_PROJECT.region-LOCATION.RESERVATION_ID`
 SET OPTIONS (autoscale_max_slots = 400);
 ```
 
-### Declarative IaC: Google Terraform Resource
+### 2. Google Terraform Resource (Declarative IaC)
 Documentation: [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation)
 
 ```hcl
@@ -94,7 +95,8 @@ resource "google_bigquery_reservation" "reservation" {
 }
 ```
 
-### Alternative CLI Fallback: `bq update` *(Use only if SQL DDL execution is unavailable)*
+### 3. CLI Fallback (`bq update`)
+*Use `bq` only when SQL DDL or Terraform execution is not available.*
 Documentation: [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update)
 
 ```bash
@@ -115,7 +117,7 @@ Configures the BigQuery admin project to allow fluid autoscaling across reservat
 > [!WARNING]
 > **Append Only**: Always inspect the existing project configuration first. Append the new reservation ID to the existing list—**never overwrite** the array, or other reservations in the project will lose fluid autoscaling.
 
-### Primary Method: Native BigQuery SQL DDL
+### 1. BigQuery SQL DDL (Primary)
 Documentation: [BigQuery SQL ALTER PROJECT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_project)
 
 ```sql
@@ -135,7 +137,7 @@ SET OPTIONS (
 );
 ```
 
-### Declarative IaC: Terraform Pattern
+### 2. Terraform Pattern (Declarative IaC)
 Documentation: [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) / [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation)
 
 Because project-level BigQuery options are governed via SQL DDL, maintain them in Terraform using a `terraform_data` provisioner that tracks reservation definitions:
@@ -164,24 +166,47 @@ resource "terraform_data" "fluid_autoscaling_config" {
 }
 ```
 
+### 3. CLI Fallback (`bq query`)
+*Use `bq` only when running SQL DDL directly via CLI.*
+Documentation: [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query)
+
+```bash
+bq query \
+  --project_id=ADMIN_PROJECT \
+  --location=LOCATION \
+  --nouse_legacy_sql \
+  "ALTER PROJECT \`ADMIN_PROJECT\` SET OPTIONS (\`region-LOCATION.preflight_fluid_autoscaling_reservations\` = ['existing-reservation-1', 'RESERVATION_ID']);"
+```
+
 ---
 
 ## 4. `ALLOW_FLEXIBLE_ASSIGNMENT`
 
 Grants listed service accounts or user identities permission to route jobs directly to the specific reservation (`bigquery.reservations.use`).
 
-> [!NOTE]
-> **No SQL DDL Available**: BigQuery SQL DDL does not support IAM grant syntax for reservation resources (e.g. `GRANT ... ON RESERVATION` is not supported). Therefore, reservation-scoped IAM permissions **must** be applied via the `bq` CLI tool (`--reservation`) or Terraform `google_bigquery_reservation_iam_member`.
-
 > [!IMPORTANT]
-> **Reservation Resource Scope**: To avoid granting project-wide reservation access, apply IAM bindings directly to the **reservation resource itself** using the `bq` CLI (`--reservation`) or Terraform `google_bigquery_reservation_iam_member`, rather than project-level IAM.
+> **No SQL DDL Available**: BigQuery standard SQL does not support `GRANT` or `REVOKE` statements on reservation resources. To avoid granting project-wide reservation access, apply IAM bindings directly to the **reservation resource itself** using Terraform (primary declarative approach) or the `bq` CLI fallback (`--reservation`).
 
 - **Target Resource**: `ADMIN_PROJECT:LOCATION.RESERVATION_ID`
 - **Role**: `roles/bigquery.resourceEditor` (supported least-privilege predefined role on reservations providing `bigquery.reservations.use`)
-- **CLI Commands**: [`bq get-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_get-iam-policy) and [`bq set-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) with `--reservation`.
 - **Terraform Resource**: [`google_bigquery_reservation_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_iam#google_bigquery_reservation_iam_member)
+- **CLI Commands**: [`bq get-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_get-iam-policy) and [`bq set-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) with `--reservation`.
 
-### CLI Implementation (`bq` - Required for Non-IaC Workflows)
+### 1. Google Terraform Resource (Primary Declarative)
+Documentation: [`google_bigquery_reservation_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_iam#google_bigquery_reservation_iam_member)
+
+```hcl
+resource "google_bigquery_reservation_iam_member" "flexible_assignment" {
+  project     = "ADMIN_PROJECT"
+  location    = "LOCATION"
+  reservation = google_bigquery_reservation.reservation.name
+  role        = "roles/bigquery.resourceEditor"
+  member      = "serviceAccount:runner-sa@PROJECT.iam.gserviceaccount.com"
+}
+```
+
+### 2. CLI Fallback (`bq get-iam-policy` / `bq set-iam-policy`)
+*Used when Terraform is not managing IAM bindings.*
 
 #### Step 1: Export Current Policy
 Documentation: [`bq get-iam-policy`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_get-iam-policy)
@@ -226,17 +251,4 @@ bq set-iam-policy \
   --reservation \
   ADMIN_PROJECT:LOCATION.RESERVATION_ID \
   /tmp/updated_policy.json
-```
-
-### Google Terraform Resource Implementation
-Documentation: [`google_bigquery_reservation_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_iam#google_bigquery_reservation_iam_member)
-
-```hcl
-resource "google_bigquery_reservation_iam_member" "flexible_assignment" {
-  project     = "ADMIN_PROJECT"
-  location    = "LOCATION"
-  reservation = google_bigquery_reservation.reservation.name
-  role        = "roles/bigquery.resourceEditor"
-  member      = "serviceAccount:runner-sa@PROJECT.iam.gserviceaccount.com"
-}
 ```
