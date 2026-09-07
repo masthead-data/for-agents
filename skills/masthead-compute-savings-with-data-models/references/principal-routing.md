@@ -8,7 +8,8 @@ When `operations` contains a `RESERVATION_CONFIG` action with `principals` (inst
 
 ## 1. Native BigQuery SQL Principal Assignment (Recommended)
 
-BigQuery natively supports assigning reservations directly to specific principals within a project using SQL DDL:
+BigQuery natively supports assigning reservations directly to specific principals within a project using SQL DDL.
+Documentation: [BigQuery SQL CREATE ASSIGNMENT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) | [BigQuery SQL DROP ASSIGNMENT](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment)
 
 ### Assign Principal to Reservation
 
@@ -45,13 +46,14 @@ DROP ASSIGNMENT `ADMIN_PROJECT.region-LOCATION.RESERVATION_ID.ASSIGNMENT_NAME`;
 
 ---
 
-## 2. Dedicated Source Project Assignment via `bq` CLI
+## 2. Source Project & Principal Assignment via `bq` CLI
 
-If all workloads run by the principal are isolated in a dedicated project:
+Documentation: [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) | [`bq rm --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_rm) | [`bq ls --reservation_assignments`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_ls)
 
-### Assign Project to Reservation
+### Assign Project or Specific Principal to Reservation
 
 ```bash
+# Project-wide assignment:
 bq mk --reservation_assignment \
   --project_id=ADMIN_PROJECT \
   --location=LOCATION \
@@ -59,18 +61,28 @@ bq mk --reservation_assignment \
   --job_type=QUERY \
   --assignee_type=PROJECT \
   --assignee_id=SOURCE_PROJECT
+
+# Identity-specific principal assignment within project:
+bq mk --reservation_assignment \
+  --project_id=ADMIN_PROJECT \
+  --location=LOCATION \
+  --reservation_id=RESERVATION_ID \
+  --job_type=QUERY \
+  --assignee_type=PROJECT \
+  --assignee_id=SOURCE_PROJECT \
+  --principal="principal://iam.googleapis.com/projects/-/serviceAccounts/runner-sa@PROJECT.iam.gserviceaccount.com"
 ```
 
-### Route Project Back to On-Demand
+### Route Back to On-Demand
 
-When routing an entire project back to on-demand, delete its query reservation assignment:
+When routing an entire project or principal back to on-demand, delete its query reservation assignment:
 
 ```bash
 # 1. Identify assignment ID
 bq ls --reservation_assignments \
   --project_id=ADMIN_PROJECT \
   --location=LOCATION \
-  ADMIN_PROJECT:LOCATION.RESERVATION_ID.ASSIGNMENT_ID
+  ADMIN_PROJECT:LOCATION.RESERVATION_ID
 
 # 2. Delete the assignment
 bq rm --reservation_assignment \
@@ -81,7 +93,23 @@ bq rm --reservation_assignment \
 
 ---
 
-## 3. Session / Job-Level Reservation Assignment
+## 3. Google Terraform Resource (`google_bigquery_reservation_assignment`)
+
+Documentation: [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment)
+
+To manage workload assignments declaratively via Terraform:
+
+```hcl
+resource "google_bigquery_reservation_assignment" "query_assignment" {
+  assignee    = "projects/SOURCE_PROJECT"
+  job_type    = "QUERY"
+  reservation = google_bigquery_reservation.reservation.id
+}
+```
+
+---
+
+## 4. Session / Job-Level Reservation Assignment
 
 When principals share a multi-tenant project and only specific script runs or queries should be routed:
 
@@ -108,6 +136,6 @@ In database connections (Looker, Metabase, Tableau, Python BigQuery Client):
 
 ---
 
-## 4. Pre-Requisite Permissions
+## 5. Pre-Requisite Permissions
 
 Ensure every principal in the recommendation has been granted `roles/bigquery.resourceEditor` (which provides `bigquery.reservations.use`) on the target reservation resource (see [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment)). Without this IAM binding, query jobs targeting the reservation will fail with permission denied errors.

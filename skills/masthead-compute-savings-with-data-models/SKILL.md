@@ -95,19 +95,33 @@ The `operations` array contains atomic actions in their strict execution order. 
            └── 4. RESERVATION_CONFIG
 ```
 
+### Implementation Reference Matrix
+
+| Recommendation Action | Primary Purpose | CLI Command (`bq`) | Google Terraform Resource | Detailed Reference |
+| :--- | :--- | :--- | :--- | :--- |
+| `CREATE_RESERVATION` | Provision autoscale slot reservation | [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#1-create_reservation) |
+| `ALTER_RESERVATION` | Resize reservation max autoscaling | [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#2-alter_reservation) |
+| `ENABLE_FLUID_AUTOSCALING` | Enable dynamic cross-reservation slot sharing | [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query) | [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) / `bq query` | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#3-enable_fluid_autoscaling) |
+| `ALLOW_FLEXIBLE_ASSIGNMENT`| Grant `bigquery.reservations.use` on reservation | [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) | [`google_bigquery_reservation_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_iam#google_bigquery_reservation_iam_member) | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment) |
+| `RESERVATION_CONFIG` (`PRINCIPAL`) | Route identities or projects to reservation/on-demand | [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) | [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment) | [principal-routing.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/principal-routing.md) |
+| `RESERVATION_CONFIG` (`DAG_MODEL`) | Route pipeline DAG models to reservation/on-demand | Orchestration packages | Dataform / dbt / Airflow package config | [orchestration-templates.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/orchestration-templates.md) |
+
 ### 1. Reservation Configuration (`CREATE_RESERVATION` / `ALTER_RESERVATION`)
 - **Baseline Capacity**: Always set `slot_capacity = 0` (autoscale-only for cost efficiency).
 - **Max Autoscaling**: Set `autoscale_max_slots` from the recommendation.
+- **Implementation**: CLI [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) / [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update) or Terraform [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation).
 - **Details & DDL Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#1-create_reservation).
 
 ### 2. Fluid Autoscaling (`ENABLE_FLUID_AUTOSCALING`)
 - Project-level setting enabling dynamic slot sharing.
 - **Append Only**: Always append the reservation ID to `region-<location>.preflight_fluid_autoscaling_reservations`—**never overwrite** existing entries.
+- **Implementation**: Run `ALTER PROJECT` via [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query) or Terraform `terraform_data` provisioner.
 - **Details & SQL Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#3-enable_fluid_autoscaling).
 
 ### 3. Permissions (`ALLOW_FLEXIBLE_ASSIGNMENT`)
-- Grants `roles/bigquery.resourceUser` (`bigquery.reservations.use`) on the target reservation resource to each identity in `principals`.
-- **CLI Command Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment).
+- Grants `roles/bigquery.resourceEditor` (least-privilege predefined role providing `bigquery.reservations.use`) on the target reservation resource to each identity in `principals`.
+- **Implementation**: CLI [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) or Terraform [`google_bigquery_reservation_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_iam#google_bigquery_reservation_iam_member).
+- **Details & CLI Command Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment).
 
 ### 4. Workload Routing (`RESERVATION_CONFIG`)
 Routes target workloads to the designated reservation or on-demand (`"none"`):
@@ -117,10 +131,11 @@ Routes target workloads to the designated reservation or on-demand (`"none"`):
   - **Airflow**: Configure `reservations_config.json` via `airflow-reservations`.
   - *Full package setups and code examples*: See [orchestration-templates.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/orchestration-templates.md).
 - **For Principals (`PRINCIPAL`)**: Implement identity-level routing:
-  - Dedicated project reservation assignments via `bq mk --reservation_assignment`.
-  - On-demand routing by removing project assignments via `bq rm --reservation_assignment`.
-  - Multi-tenant / session routing via `ALTER SESSION SET @@reservation = '...'`.
-  - *Full commands and session examples*: See [principal-routing.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/principal-routing.md).
+  - CLI routing via [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) (supports `--principal` and `--assignee_id`).
+  - Terraform routing via [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment).
+  - Native BigQuery SQL DDL via `CREATE ASSIGNMENT` or on-demand routing via `none` / `DROP ASSIGNMENT`.
+  - Session routing via `SET @@reservation = '...'`.
+  - *Full commands, Terraform resources, and session examples*: See [principal-routing.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/principal-routing.md).
 
 ---
 
