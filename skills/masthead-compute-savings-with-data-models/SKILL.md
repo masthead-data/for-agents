@@ -1,190 +1,171 @@
 ---
 name: masthead-compute-savings-with-data-models
-description: Optimize BigQuery compute costs by assigning data models (Dataform, dbt, Airflow) to slot reservations or on-demand compute based on Masthead recommendations.
-compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only permissions to run BigQuery jobs, access data, and view reservations.
+description: Optimize BigQuery compute costs by reassigning data models (Dataform, dbt, Airflow) or principals (service accounts, users) to slot reservations or on-demand compute based on Masthead recommendations without impacting performance.
+compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only permissions to run BigQuery jobs, access Masthead insight datasets, and view reservations.
 ---
 
-# Optimize Orchestration Compute (BigQuery Reservations)
+# Optimize BigQuery Compute Costs (Models & Principals)
 
 ## Purpose
 
-Automatically assign data models from data orchestration to BigQuery slot reservations based on compute complexity and cost optimization strategy. Routes high-compute workloads to on-demand capacities while using reservations pricing for high-traffic jobs.
+Automatically translate Masthead compute-cost recommendations (`views.insight` / exported `insights` tables) into concrete, verified configurations for BigQuery reservations and orchestration pipelines.
 
-## When to Use
+The primary objective is **reliable enterprise workload cost optimization without performance impact**. Workloads are systematically routed between autoscale slot reservations and on-demand compute pools based on simulated execution profiles.
 
-- Assigning new models/actions to appropriate compute tiers (reserved vs on-demand)
-- Rebalancing reservation assignments based on priority changes
-- Optimizing costs by moving low-priority workloads to on-demand
-- Ensuring critical pipelines get guaranteed compute resources
+## Workload Scope
+
+Masthead evaluates two classes of compute recommendations:
+1. **Data Models (`DAG_MODEL`)**: Orchestrated pipeline nodes across Dataform actions, dbt models, and Airflow tasks.
+2. **Principals (`PRINCIPAL`)**: Identity-based workloads executed by service accounts or users across projects.
 
 ## Operating Mode: Cautious Advisory (Non-Action)
 
 This skill operates strictly in an advisory capacity:
+- **Zero Automated In-Place Mutation**: The agent **never** creates/alters BigQuery reservations, grants IAM permissions, or modifies repository configuration files (`definitions/_reservations.js`, `dbt_project.yml`, `reservations_config.json`) without explicit human review and approval.
+- **Agent Role**: Query insights, evaluate simulation reliability caveats, calculate trade-offs, verify reservation capacity, and prepare exact SQL commands, configuration diffs, and validation checks for human review.
 
-- **Zero Automated Configuration Changes**: The agent **never** alters reservation assignments or modifies repo files (`definitions/_reservations.js`, `dbt_project.yml`) directly without explicit human direction.
-- **Agent Role**: Query insights for compute model recommendations, calculate workload trade-offs between slot editions and on-demand, verify reservation capacity, and prepare proposed configuration diffs or review tables for human approval.
+---
 
-## Implementation Steps
+## Workflow Implementation
 
-### Step 0: Dataset Context
+### Step 0: Dataset Context & Target Resolution
 
-Ensure access to your Masthead insights dataset in BigQuery:
+Ensure access to the Masthead insights dataset in BigQuery:
+- **Table Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (e.g. `masthead-prod.hkm.insights`, `masthead-prod.realtruck.insights`).
+- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache per preference.
 
-- **Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (see [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md) and [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md)).
-- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache it per their preference (global `~/.masthead/config.json` recommended).
+### Step 1: Pull & Filter Compute Recommendations
 
-### Step 1: Detect Orchestration Technology
-
-Identify which orchestration technology is in use by querying available recommendations:
+Execute the following query to extract active compute recommendations. The query filters out unprofitable configurations (`savings_30d <= 0`) and extracts both model and principal reassignments:
 
 ```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
-"SELECT subtype, COUNT(*) AS recommendation_count
-FROM \`masthead-prod.<DATASET_NAME>.insights\`
-WHERE category = 'Cost'
-  AND type = 'Compute costs'
-GROUP BY subtype"
+bq query --project_id=YOUR_PROJECT --nouse_legacy_sql --format=prettyjson \
+"WITH ranked_insights AS (
+  SELECT
+    subtype,
+    last_updated_time,
+    overview,
+    operations,
+    SAFE.FLOAT64(overview.cost_30d) AS cost_30d,
+    SAFE.FLOAT64(overview.savings_30d) AS savings_30d,
+    STRING(overview.status) AS status,
+    STRING(overview.location) AS location,
+    JSON_EXTRACT_ARRAY(overview.reservations) AS reservations,
+    JSON_EXTRACT_ARRAY(overview.statusData) AS status_data
+  FROM \`masthead-prod.<DATASET_NAME>.insights\`
+  WHERE category = 'Cost'
+    AND type = 'Compute costs'
+)
+SELECT *
+FROM ranked_insights
+WHERE savings_30d > 0
+ORDER BY savings_30d DESC"
 ```
 
-If compute model recommendations are not present or all rows share the same technology, infer from the user's project structure (presence of `dbt_project.yml` → dbt, `definitions/` folder → Dataform, Airflow DAG files → Airflow). Confirm the detected tool with the user before proceeding.
+#### Row Contract & Rules
+- **Alternative End-States**: Each row is an independently simulated plan for a workload group. **Rows whose operations touch the same reservation are mutually exclusive alternative end-states, not composable steps.** Select the row yielding the highest verified savings and skip alternatives.
+- **Negative Savings**: Discard any row where `savings_30d <= 0` (the simulated setup costs *more* than the status quo).
+- **Recalculation Freshness**: Check `last_updated_time`. Rows are regenerated periodically; re-verify before finalizing a proposal.
 
-### Step 2: Pull Recommendations
+### Step 2: Audit Simulation Reliability & Caveats
 
-Pull recommendations from `masthead-prod.<DATASET_NAME>.insights`:
+To ensure reliable optimization with **zero performance degradation**, evaluate `status` and all entries in `status_data`:
 
-Replace the `subtype` value with the one detected in step 1 (e.g. `'Re-assign reservation for Dataform models'`, `'Re-assign reservation for dbt models'`, or `'Re-assign reservation for Airflow DAGs'`).
+| Status / Caveat Type | Meaning & Enterprise Impact | Required Action |
+| --- | --- | --- |
+| `status = 'DRAFT'` | Provisional plan; simulation could not fully verify all workload variables. | **Do not auto-apply.** Prepare proposal for manual engineering review. |
+| `UNMET_PERFORMANCE` | No simulated reservation size met the performance criteria; closest option chosen. | **High Risk.** Workloads may experience latency spikes or miss SLAs. Require human approval and set up latency monitoring. |
+| `SKIPPED_WORKLOAD` | Workload for listed entities (`totalSlotMs`, `repositories`, `sourceProjects`) was excluded from simulation (e.g. models spanning multiple reservations). | **Do not route skipped workloads** and **do not count their slot hours toward savings**. |
+| `MAX_PLAN_PROJECTS` | Workload group exceeded the simulation project limit; costs are plan estimates. | Flag that numbers are theoretical estimates rather than cycle-accurate simulations. |
+| `UNMAPPED_WORKLOAD` | Workloads had no pipeline mapping; costs are plan estimates. | Require manual validation of underlying query patterns. |
 
-```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
-"SELECT
-  SAFE.STRING(m.model_id) AS action_name,
-  SAFE.STRING(op.recommended_compute_model) AS recommended_model,
-  SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
-  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d
-FROM \`masthead-prod.<DATASET_NAME>.insights\`,
-  UNNEST(JSON_QUERY_ARRAY(operations)) AS op,
-  UNNEST(JSON_QUERY_ARRAY(op.models)) AS m
-WHERE category = 'Cost'
-  AND type = 'Compute costs'
-  AND subtype = 'Re-assign reservation for Dataform models'
-ORDER BY savings_usd_30d DESC"
+> [!IMPORTANT]
+> Whenever `status = 'DRAFT'` or `status_data` is non-empty, your proposal **must** include a `Notes & Risk Assessment` section explicitly detailing each caveat, its scope, and the performance implications for the plan.
+
+---
+
+## Canonical Operations Sequence (`operations`)
+
+The `operations` array contains atomic actions in their strict execution order. Execute them in this sequence using the dedicated references:
+
+```
+1. CREATE_RESERVATION / ALTER_RESERVATION
+   └── 2. ENABLE_FLUID_AUTOSCALING
+       └── 3. ALLOW_FLEXIBLE_ASSIGNMENT
+           └── 4. RESERVATION_CONFIG
 ```
 
-### Step 3: Resolve Reservation Targets
+### 1. Reservation Configuration (`CREATE_RESERVATION` / `ALTER_RESERVATION`)
+- **Baseline Capacity**: Always set `slot_capacity = 0` (autoscale-only for cost efficiency).
+- **Max Autoscaling**: Set `autoscale_max_slots` from the recommendation.
+- **Details & DDL Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#1-create_reservation).
 
-Resolve reservation targets using `recommended_model` values and reservation edition metadata:
+### 2. Fluid Autoscaling (`ENABLE_FLUID_AUTOSCALING`)
+- Project-level setting enabling dynamic slot sharing.
+- **Append Only**: Always append the reservation ID to `region-<location>.preflight_fluid_autoscaling_reservations`—**never overwrite** existing entries.
+- **Details & SQL Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#3-enable_fluid_autoscaling).
 
-- Verify reservation editions using `INFORMATION_SCHEMA.RESERVATIONS`:
+### 3. Permissions (`ALLOW_FLEXIBLE_ASSIGNMENT`)
+- Grants `roles/bigquery.resourceUser` (`bigquery.reservations.use`) on the target reservation resource to each identity in `principals`.
+- **CLI Command Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment).
 
+### 4. Workload Routing (`RESERVATION_CONFIG`)
+Routes target workloads to the designated reservation or on-demand (`"none"`):
+- **For Data Models (`DAG_MODEL`)**: Implement using Masthead's open-source packages. Never hand-edit individual operator files.
+  - **Dataform**: Configure `definitions/_reservations.js` via `@masthead-data/dataform-package`.
+  - **dbt**: Configure `dbt_project.yml` via `masthead-data/bq_reservations`.
+  - **Airflow**: Configure `reservations_config.json` via `airflow-reservations`.
+  - *Full package setups and code examples*: See [orchestration-templates.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/orchestration-templates.md).
+- **For Principals (`PRINCIPAL`)**: Implement identity-level routing:
+  - Dedicated project reservation assignments via `bq mk --reservation_assignment`.
+  - On-demand routing by removing project assignments via `bq rm --reservation_assignment`.
+  - Multi-tenant / session routing via `ALTER SESSION SET @@reservation = '...'`.
+  - *Full commands and session examples*: See [principal-routing.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/principal-routing.md).
+
+---
+
+## Verification & Safeguards
+
+Before submitting configuration diffs or marking proposals complete, perform the following validation checks:
+
+### 1. Verify Capacity & Editions
 ```bash
-bq query --project_id=YOUR_PROJECT --location=US --use_legacy_sql=false --format=pretty \
+bq query --project_id=ADMIN_PROJECT --location=LOCATION --nouse_legacy_sql --format=pretty \
 "SELECT
   reservation_name,
   project_id,
   edition,
-  slot_capacity
-FROM RESERVATION_ADMIN_PROJECT.\`region-us\`.INFORMATION_SCHEMA.RESERVATIONS
+  slot_capacity,
+  autoscale.max_slots AS autoscale_max_slots
+FROM \`region-LOCATION.INFORMATION_SCHEMA.RESERVATIONS\`
 ORDER BY project_id, reservation_name"
 ```
 
-- Map `recommended_model = 'ON-DEMAND'` to the config entry where `reservation = 'none'`.
-- For all other values (for example `ENTERPRISE`), choose a reservation whose **edition** matches `recommended_model`.
-- If exactly one matching reservation exists, assign automatically.
-- If multiple matching reservations exist, ask the user which reservation tag to use.
-- If no matching reservation exists, ask the user to pick a fallback reservation or create a new matching reservation first.
-- Ensure an on-demand bucket exists. If missing, create one:
+### 2. Validate Assignment Uniqueness & Syntax
+- **No Duplicate Routing**: Each Dataform action, dbt model, Airflow task, or principal must appear in **exactly one** reservation target (`RESERVATION_CONFIG` group).
+- **Compile Validation**:
+  - Dataform: `dataform compile`
+  - dbt: `dbt compile`
+- **Verify Repository Scope**: Check that actions/models in the recommendation exist in the current project graph. Discard any obsolete model IDs.
 
-```javascript
-{
-  tag: 'on_demand',
-  reservation: 'none',
-  actions: []
-}
-```
+---
 
-### Step 4: Review Assignment Mapping
+## Decision Criteria: Reserved Slots vs. On-Demand
 
-Retrieve the final assignment mapping. The user or agent can choose the most optimal format to store, present, or review these candidates (e.g., as a Markdown table, a CSV file, or an interactive terminal selection):
+| Evaluation Factor | Reserved Slots (Autoscale) | On-Demand (`none`) |
+| :--- | :--- | :--- |
+| **Workload Profile** | High frequency, predictable queries, baseline data transforms. | Infrequent, bursty, exploratory queries, low slot-ms footprint. |
+| **SLA & Performance** | Strict SLAs; requires guaranteed slot pool and priority scheduling. | Flexible timing; benefits from instant access to up to 2,000 on-demand slots. |
+| **Cost Dynamics** | Economical for high slot-hour volumes under fixed/autoscale pricing. | Economical when queries scan modest data and run sporadically. |
+| **Impact of Shift** | Protects organization budget from run-away query consumption. | Frees reservation slots for critical path workloads without throttling. |
 
-```bash
-bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
-"SELECT
-  STRING(m.model_id) AS action_name,
-  STRING(op.recommended_compute_model) AS recommended_model,
-  SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
-  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d
-FROM \`masthead-prod.<DATASET_NAME>.insights\`,
-  UNNEST(JSON_QUERY_ARRAY(operations)) AS op,
-  UNNEST(JSON_QUERY_ARRAY(op.models)) AS m
-WHERE category = 'Cost'
-  AND type = 'Compute costs'
-  AND subtype = 'Re-assign reservation for Dataform models'
-ORDER BY savings_usd_30d DESC"
-```
+---
 
-### Step 5: Prepare Configuration Artifacts (User-Executed)
+## Common Anti-Patterns & Pitfalls
 
-> [!IMPORTANT]
-> The agent does **not** alter repository configuration files directly without explicit human direction. All query recommendations must be reviewed and merged by a developer.
-
-Prepare the configuration diffs or artifacts for the detected orchestration tool:
-
-#### Dataform
-
-- Open `definitions/_reservations.js`.
-- The `action_name` values map directly to Dataform action IDs (e.g. `project.dataset.table`) as used in the `actions` arrays of `_reservations.js`.
-- Replace `on_demand` `actions` with all actions where the recommended model is `ON-DEMAND`.
-- Replace reserved reservation `actions` with all actions where the recommended model is not `ON-DEMAND` (e.g., using the reservation mapped to the recommended edition).
-- Remove duplicates; keep only actions present in this repo's Dataform graph.
-- Verify: `dataform compile` and check for duplicate assignments.
-- See package reference: [`@masthead-data/dataform-package`](https://github.com/masthead-data/dataform-package)
-
-#### dbt
-
-- Follow the reservation assignment workflow from [`masthead-data/dbt-reservations`](https://github.com/masthead-data/dbt-reservations).
-- Map recommendations to the appropriate dbt model tags or selector targets.
-- Update the relevant `dbt_project.yml` or profile configuration per the repo's instructions.
-
-#### Airflow
-
-- Follow the reservation assignment workflow from [`masthead-data/airflow-reservations`](https://github.com/masthead-data/airflow-reservations).
-- Map recommendations to DAG or task-level BigQuery reservation labels.
-- Update the relevant operator configuration per the repo's instructions.
-
-### Step 6: Verify Changes
-
-After applying, confirm assignments are non-overlapping and align with the recommendation output. For Dataform:
-
-```bash
-# Check syntax
-dataform compile
-
-# Validate no duplicate assignments
-grep -r "\.actions" definitions/_reservations.js
-```
-
-For dbt and Airflow, follow the verification steps in their respective repositories.
-
-## Decision Criteria
-
-| Factor           | Reserved Slots     | On-Demand             |
-| ---------------- | ------------------ | --------------------- |
-| **Priority**     | High, SLA-bound    | Low, flexible         |
-| **Frequency**    | Regular, scheduled | Ad-hoc, occasional    |
-| **Cost Pattern** | Predictable usage  | Variable, sporadic    |
-| **Impact**       | Critical pipelines | Experimental, samples |
-
-## Key Notes
-
-- Each action should appear in only ONE reservation config
-- File starts with `_` to ensure it runs first in Dataform queue
-- Changes take effect on next Dataform workflow run
-- Package automatically handles global assignment (no per-file edits needed)
-- **All recommendations must be human-reviewed** before applying. Rely on PR review or explicit confirmation.
-- The only interactive checkpoint is reservation selection when more than one reservation matches the recommended edition
-
-## Package References
-
-- **Dataform**: [`@masthead-data/dataform-package`](https://github.com/masthead-data/dataform-package)
-- **dbt**: [`masthead-data/dbt-reservations`](https://github.com/masthead-data/dbt-reservations)
-- **Airflow**: [`masthead-data/airflow-reservations`](https://github.com/masthead-data/airflow-reservations)
+- **Overwriting Fluid Autoscaling**: Replacing the `preflight_fluid_autoscaling_reservations` array instead of appending new entries.
+- **Treating `"reservation": "none"` as Missing**: Mistaking `"none"` for an unassigned error rather than deliberate on-demand routing.
+- **Inconsistent Identifier Substitution**: Using different names for `BQ_ADMIN_PROJECT` or `RESERVATION_ID` across different steps of the same recommendation.
+- **Ignoring `UNMET_PERFORMANCE` Warnings**: Moving performance-sensitive models to lower slot tiers when simulations flagged unmet latency thresholds.
+- **Applying Sub-Zero Savings**: Implementing recommendations where `savings_30d < 0`.
+- **Manual Pipeline Editing**: Attempting to set reservation flags on individual operators or BigQuery adapters instead of using the supported Masthead packages.
