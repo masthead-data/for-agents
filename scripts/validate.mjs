@@ -103,7 +103,8 @@ const MCP_CONFIGS = [
   {
     path: 'mcp.json',
     standard: 'Agent Plugins 1.0.0',
-    validateServer: (srv) => srv && (srv.url || srv.command)
+    requireSchema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
+    validateServer: (srv) => srv && ((srv.url && ['streamable-http', 'sse'].includes(srv.type)) || srv.command)
   },
   {
     path: 'mcp_config.json',
@@ -112,22 +113,17 @@ const MCP_CONFIGS = [
   }
 ];
 
-MCP_CONFIGS.push({
-  path: '.mcp.json',
-  standard: 'Codex plugin (.codex-plugin/plugin.json mcpServers)',
-  // Codex's bundled validator requires a { mcpServers: {...} } wrapper and rejects other keys.
-  unwrap: (data) => data.mcpServers,
-  validateServer: (srv) => Boolean(srv.url || srv.command)
-});
-
 for (const mcp of MCP_CONFIGS) {
   const data = loadJson(mcp.path);
   if (!data) continue;
 
-  const map = mcp.unwrap ? mcp.unwrap(data) : data.mcpServers;
-  const servers = map ? Object.entries(map) : [];
+  if (mcp.requireSchema && data.$schema !== mcp.requireSchema) {
+    error(`${mcp.path}: "$schema" must be ${mcp.requireSchema} (Codex refuses the file without it)`);
+    continue;
+  }
+  const servers = data.mcpServers ? Object.entries(data.mcpServers) : [];
   if (servers.length === 0) {
-    error(`${mcp.path}: server map is empty or missing`);
+    error(`${mcp.path}: "mcpServers" is empty or missing`);
     continue;
   }
 
