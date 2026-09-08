@@ -115,8 +115,8 @@ const MCP_CONFIGS = [
 MCP_CONFIGS.push({
   path: '.mcp.json',
   standard: 'Codex plugin (.codex-plugin/plugin.json mcpServers)',
-  // Codex accepts a direct server map or a { mcp_servers: {...} } wrapper.
-  unwrap: (data) => data.mcp_servers ?? data,
+  // Codex's bundled validator requires a { mcpServers: {...} } wrapper and rejects other keys.
+  unwrap: (data) => data.mcpServers,
   validateServer: (srv) => Boolean(srv.url || srv.command)
 });
 

@@ -1,5 +1,7 @@
 {
-  "masthead": {
-    "url": "https://mcp.mastheadata.com/mcp"
+  "mcpServers": {
+    "masthead": {
+      "url": "https://mcp.mastheadata.com/mcp"
+    }
   }
 }
