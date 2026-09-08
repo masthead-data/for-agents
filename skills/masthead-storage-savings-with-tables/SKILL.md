@@ -28,7 +28,7 @@ The look-back window is the tenant's `dataUsageLookBackDays` from `get_tenant_se
 
 **Pattern parents:** `target_resource` may be a wildcard such as `project.dataset.events_*` — Masthead collapses date-sharded siblings into one row whose `num_bytes`, `cost_30d`, and `savings_30d` are summed over the children. `bq rm` does not expand wildcards; see Step 3 for how to list the real tables.
 
-**Linked (Analytics Hub) datasets:** `overview.is_linked = true` marks a table in a dataset your project *subscribes* to, not one it owns — the storage is billed to the publisher and you cannot drop its tables. Classify it `keep` and say so; the only possible action is unsubscribing from the listing, which is outside this skill. On older exports without `is_linked`, the tell is `cost_30d` and `savings_30d` both NULL with a large `num_bytes`; confirm with `bq show --format=prettyjson YOUR_PROJECT:YOUR_DATASET` (a `linkedDatasetSource` block means linked).
+**Linked datasets:** `overview.is_linked = true` marks a table in a dataset your project *subscribes* to (Analytics Hub listing, Cloud Logging linked bucket), not one it owns — the storage is billed to the publisher and you cannot drop its tables, which is also why `cost_30d` is NULL there. Classify it `keep`, tell the user it is a subscription, and never emit a `bq rm` for it; the only possible action is unsubscribing from the listing, which is outside this skill.
 
 ### Key Signal
 
@@ -71,7 +71,8 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   SAFE.INT64(overview.num_bytes) / POW(1024, 4) AS total_tib,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
   SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  SAFE.TIMESTAMP(SAFE.STRING(overview.last_modified_time)) AS last_modified_time
+  SAFE.TIMESTAMP(SAFE.STRING(overview.last_modified_time)) AS last_modified_time,
+  SAFE.BOOL(overview.is_linked) AS is_linked
 FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND subtype IN ('Dead end table', 'Leaf dead end table', 'Unused table')
@@ -79,7 +80,7 @@ WHERE category = 'Cost'
 ORDER BY savings_usd_30d DESC"
 ```
 
-**Note:** `cost_30d` and `savings_30d` may be null — `total_tib` is the reliable sizing signal. Include `last_modified_time` to detect external writers (see Key Signal above).
+**Note:** `cost_30d` and `savings_30d` may be null — `total_tib` is the reliable sizing signal. Include `last_modified_time` to detect external writers (see Key Signal above). Rows with `is_linked = true` are not yours to drop (see Linked datasets above); report them separately as `keep`.
 
 ### Step 2: Review and Decide
 

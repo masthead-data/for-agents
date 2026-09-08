@@ -49,14 +49,15 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   SAFE.STRING(overview.storage_billing_model) AS current_billing_model,
   SAFE.STRING(operations[0].recommended_storage_billing_model) AS recommended_billing_model,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
-  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d
+  SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
+  SAFE.BOOL(overview.is_linked) AS is_linked
 FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND type = 'Storage billing model'
 ORDER BY savings_usd_30d DESC"
 ```
 
-**Note:** `savings_30d` is the primary ranking signal. Every row is an `alter` recommendation from `current_billing_model` to `recommended_billing_model` (`LOGICAL` ↔ `PHYSICAL`). Masthead does not emit expiration-policy insights; apply expiration policies from your own retention rules (Step 3).
+**Note:** `savings_30d` is the primary ranking signal. A row with `is_linked = true` is a subscribed (linked) dataset — its billing model belongs to the publisher, mark it `skip`. Every row is an `alter` recommendation from `current_billing_model` to `recommended_billing_model` (`LOGICAL` ↔ `PHYSICAL`). Masthead does not emit expiration-policy insights; apply expiration policies from your own retention rules (Step 3).
 
 ### Step 2: Review Candidates
 
