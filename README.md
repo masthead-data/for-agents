@@ -32,6 +32,8 @@ When installed in Claude Code or Antigravity, quick slash commands are available
 - `/triage` — Launch real-time incident triaging, upstream lineage inspection, and blast-radius analysis across monitored GCP projects.
 - `/savings` — Audit BigQuery storage and compute waste across tables, datasets, data models, and pipelines.
 
+Codex has no plugin commands; the same workflows ship as skills you invoke explicitly: `$masthead-triage` and `$masthead-savings`.
+
 ---
 
 ## Installation
