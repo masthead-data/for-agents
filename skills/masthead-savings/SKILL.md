@@ -6,7 +6,7 @@ compatibility: Requires the Masthead MCP server and the four masthead-*-savings 
 
 # Masthead FinOps Audit
 
-Run the Masthead FinOps advisory workflow, in this order:
+Run the Masthead FinOps advisory workflow, in this order. If the user named a project, dataset, table, or a single area (tables, datasets, pipelines, models), restrict the audit to that and skip the other steps.
 
 0. Call the Masthead MCP tool `get_tenant_settings` once: it returns the insights dataset (`masthead-prod.<dataset>`) and the look-back window every skill below needs. If `insightsDataset.enabled` is `false`, stop — BigQuery export is not provisioned for this tenant.
 1. Scan for dead-end or unused tables (`masthead-storage-savings-with-tables`).

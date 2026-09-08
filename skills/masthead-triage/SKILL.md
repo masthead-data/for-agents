@@ -6,7 +6,7 @@ compatibility: Requires the Masthead MCP server and the masthead-incident-triagi
 
 # Masthead Incident Triaging
 
-Launch the incident triaging workflow using `masthead-incident-triaging`:
+Launch the incident triaging workflow using `masthead-incident-triaging`. If the user named an incident id, a table (`project.dataset.table`), or a project, start there; otherwise start from the open incidents list.
 
 1. Connect to the Masthead MCP server to scan active incidents across monitored GCP projects.
 2. Analyze upstream pipelines and downstream consumer impact.
