@@ -95,7 +95,7 @@ Review the retrieved list of candidates. The user or agent can choose the most o
 - Is this a backup or archive table?
 - Is there a downstream dependency not captured in lineage?
 - Is this table part of an active experiment or migration?
-- **For repo-managed projects:** Search the codebase (e.g., `grep` for table name in model definitions, scripts) to confirm ownership. Table naming can be misleading (e.g. may seem like current outputs but could be legacy).
+- **For repo-managed projects:** If the current working directory is a git repository, `grep` it for the table name in model definitions and scripts to confirm ownership; otherwise ask the user which repository owns the table rather than searching the filesystem. Table naming can be misleading (e.g. may seem like current outputs but could be legacy).
 - **Disable producers:** if there is a related pipeline code - it needs to be disabled to avoid regenerating the table after dropping.
 - **Inspect Live Metadata**: For ambiguous or high-value candidates, run the CLI equivalent of `table_get` to verify live row count, total bytes, labels, and exact `lastModifiedTime`:
 

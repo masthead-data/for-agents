@@ -74,7 +74,7 @@ Review the retrieved list of candidates. The user or agent can choose the most o
 **Review criteria:**
 
 - **Lineage Gaps:** Does the target table have external consumers (e.g., connected sheets, BI tools, external APIs) that are not tracked in the lineage graph?
-- **Code Search:** Search the repository to locate where the pipeline is defined — grep for the destination table name; the `principal` (service account) usually narrows it to one orchestrator or CI job.
+- **Code Search:** If the current working directory is a git repository, grep it for the destination table name; the `principal` (service account) usually narrows it to one orchestrator or CI job. If it is not a repository, ask the user which repository holds the pipeline instead of searching the filesystem.
 - **Multiple Writers:** Check if other pipelines or manual queries write to the same table.
 
 ### Step 3: Generate Deactivation Artifacts (User-Executed)
