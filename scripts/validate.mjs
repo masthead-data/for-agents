@@ -112,13 +112,22 @@ const MCP_CONFIGS = [
   }
 ];
 
+MCP_CONFIGS.push({
+  path: '.mcp.json',
+  standard: 'Codex plugin (.codex-plugin/plugin.json mcpServers)',
+  // Codex accepts a direct server map or a { mcp_servers: {...} } wrapper.
+  unwrap: (data) => data.mcp_servers ?? data,
+  validateServer: (srv) => Boolean(srv.url || srv.command)
+});
+
 for (const mcp of MCP_CONFIGS) {
   const data = loadJson(mcp.path);
   if (!data) continue;
 
-  const servers = data.mcpServers ? Object.entries(data.mcpServers) : [];
+  const map = mcp.unwrap ? mcp.unwrap(data) : data.mcpServers;
+  const servers = map ? Object.entries(map) : [];
   if (servers.length === 0) {
-    error(`${mcp.path}: "mcpServers" is empty or missing`);
+    error(`${mcp.path}: server map is empty or missing`);
     continue;
   }
 
