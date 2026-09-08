@@ -28,7 +28,7 @@ The look-back window is the tenant's `dataUsageLookBackDays` from `get_tenant_se
 
 **Pattern parents:** `target_resource` may be a wildcard such as `project.dataset.events_*` — Masthead collapses date-sharded siblings into one row whose `num_bytes`, `cost_30d`, and `savings_30d` are summed over the children. `bq rm` does not expand wildcards; see Step 3 for how to list the real tables.
 
-**Linked datasets:** `overview.is_linked = true` marks a table in a dataset your project *subscribes* to (Analytics Hub listing, Cloud Logging linked bucket), not one it owns — the storage is billed to the publisher and you cannot drop its tables, which is also why `cost_30d` is NULL there. Classify it `keep`, tell the user it is a subscription, and never emit a `bq rm` for it; the only possible action is unsubscribing from the listing, which is outside this skill.
+**No billed cost:** `cost_30d` is NULL when Masthead sees no storage bill for the table in your project — a dataset you *subscribe* to rather than own (Analytics Hub listing, Cloud Logging linked bucket), an external table, or a table that no longer exists. Such a row is not a saving: classify it `keep`, do not size it by `total_tib` however large, and never emit a `bq rm` for it. If it is a subscription, the only possible action is unsubscribing from the listing, which is outside this skill.
 
 ### Key Signal
 
@@ -71,16 +71,15 @@ bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
   SAFE.INT64(overview.num_bytes) / POW(1024, 4) AS total_tib,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
   SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  SAFE.TIMESTAMP(SAFE.STRING(overview.last_modified_time)) AS last_modified_time,
-  SAFE.BOOL(overview.is_linked) AS is_linked
+  SAFE.TIMESTAMP(SAFE.STRING(overview.last_modified_time)) AS last_modified_time
 FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND subtype IN ('Dead end table', 'Leaf dead end table', 'Unused table')
   AND overview.num_bytes IS NOT NULL
-ORDER BY savings_usd_30d DESC"
+ORDER BY savings_usd_30d DESC NULLS LAST"
 ```
 
-**Note:** `cost_30d` and `savings_30d` may be null — `total_tib` is the reliable sizing signal. Include `last_modified_time` to detect external writers (see Key Signal above). Rows with `is_linked = true` are not yours to drop (see Linked datasets above); report them separately as `keep`.
+**Note:** `savings_usd_30d` is the ranking signal; `total_tib` only sizes rows that have a cost. Rows with NULL `cost_usd_30d` sort last and are `keep` (see No billed cost above) — report them separately, never as candidates. Include `last_modified_time` to detect external writers (see Key Signal above).
 
 ### Step 2: Review and Decide
 
