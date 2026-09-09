@@ -114,7 +114,7 @@ npx skills add masthead-data/for-agents --skill masthead-storage-savings-with-ta
 
 ## Prerequisites & Authentication
 
-- **Masthead Account & Dataset**: A provisioned Masthead insights dataset in BigQuery. [Request access →](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)
+- **Masthead Account & Dataset**: A provisioned Masthead insights dataset in BigQuery. [Request access →](https://docs.mastheadata.com/developer/api#set-up-access)
 - **Google Cloud CLI**: Authenticated via `gcloud auth login` with BigQuery read permissions.
 - **MCP Server Authentication**: The Masthead MCP server (`https://mcp.mastheadata.com/mcp`) authenticates via Google OAuth 2.0 in your agent client — see the setup checklist above for the per-client command (service account support coming soon).
 
