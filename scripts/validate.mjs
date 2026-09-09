@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveRepositoryPath } from './repository-path.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const errors = [];
@@ -17,7 +18,12 @@ function success(msg) {
 }
 
 function loadJson(relPath) {
-  const fullPath = path.join(rootDir, relPath);
+  const fullPath = resolveRepositoryPath(rootDir, relPath);
+  if (!fullPath) {
+    error(`Invalid or outside-repository path: ${relPath}`);
+    return null;
+  }
+
   if (!fs.existsSync(fullPath)) {
     error(`Missing file: ${relPath}`);
     return null;
