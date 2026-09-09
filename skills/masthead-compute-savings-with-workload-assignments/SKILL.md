@@ -1,5 +1,5 @@
 ---
-name: masthead-compute-savings-with-data-models
+name: masthead-compute-savings-with-workload-assignments
 description: Optimize BigQuery compute costs by reassigning data models (Dataform, dbt, Airflow) or principals (service accounts, users) to slot reservations or on-demand compute based on Masthead recommendations without impacting performance.
 compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only permissions to run BigQuery jobs, access Masthead insight datasets, and view reservations.
 ---

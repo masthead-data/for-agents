@@ -164,7 +164,7 @@ Prepare the configuration diffs, commands, or documentation requested by the use
 ## Related Optimizations
 
 - **Table Cleanup**: Drop the orphan tables left behind by disabled pipelines (`masthead-storage-savings-with-tables`).
-- **Compute Reservations**: Re-assign active pipelines to appropriate reservations or on-demand pricing (`masthead-compute-savings-with-data-models`).
+- **Compute Reservations**: Re-assign active pipelines to appropriate reservations or on-demand pricing (`masthead-compute-savings-with-workload-assignments`).
 
 ## Documentation
 
