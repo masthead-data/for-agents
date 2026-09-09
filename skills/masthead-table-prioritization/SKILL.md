@@ -40,17 +40,17 @@ Take the scope from the user's request: a project, a dataset, and the percentile
 
 ### Step 1: Candidates
 
-1. `list_table_scores` with `alertTiers = ["REGULAR"]`, `minPercentile = <p>`, `limit = 50` (plus `project` / `dataset` when scoped). Page with `page` while `total` exceeds what you fetched.
-2. `list_table_scores` again with `alertTiers = ["MUTED"]` and the same percentile. Keep these rows in a separate list; they are never candidates for a suggested tier.
+1. `list_table_scores` with `alertTiers = ["REGULAR"]`, `minPercentile = <p>`, `limit = 200` (plus `project` / `dataset` when scoped). Fetch at most the first 2 pages (400 tables) — the report is a ranked shortlist, not the whole scope. Note `total` from the response and tell the user how many more tables sit above the cut.
+2. `list_table_scores` again with `alertTiers = ["MUTED"]` and the same percentile, `limit = 200`, one page only. Keep these rows in a separate list; they are never candidates for a suggested tier.
 
-Note `percentiles.p90` and `percentiles.p95` from the response; report them so the user sees where the cut sits.
+`percentiles.p50`/`p90`/`p95` are the tenant's score **values** at those percentiles (points on the 0–1 score scale), not ranks. Each item's own `percentile` is that table's **rank** within the tenant scope (0–100). Note `percentiles.p90` and `percentiles.p95` from the response; report them so the user sees where the cut sits.
 
 ### Step 2: Suggested tier and reason
 
 For each REGULAR candidate:
 
-* `percentile` ≥ 95 → suggest **CRITICAL**; 90 ≤ `percentile` < 95 → suggest **PRIORITY** (shift both when the user chose another percentile: top half of the selected band → CRITICAL).
-* Reason: one sentence from `metrics`, concrete values, dominant signals first. Example: "3 BI assets, $210 downstream compute in 30 days, read hourly, written daily".
+* `percentile` ≥ 95 → suggest **CRITICAL**; 90 ≤ `percentile` < 95 → suggest **PRIORITY** (shift both when the user chose another percentile `p`: top half of the selected band → CRITICAL, i.e. CRITICAL cut = `(p + 100) / 2`). Worked example: percentile 80 chosen → PRIORITY for 80–90, CRITICAL for ≥ 90.
+* Reason: one sentence from `metrics`, concrete values, dominant signals first. Example: "3 BI assets, $210 downstream compute in 30 days, read hourly, written daily". If a metric is 0 or missing, say "not observed" instead of a number — a line like "written every 0 seconds" must never appear.
 
 Never suggest lowering a tier. Never suggest a tier for a MUTED table.
 
@@ -64,11 +64,12 @@ Table `table | current tier | suggested tier | score | percentile | why`, highes
 
 ### Step 5: Apply (Action Mode only)
 
-Only after the user confirms — per table, or "all listed" — call `update_table_priority` for each confirmed table with the suggested tier, then `list_table_scores` scoped to those tables (`dataset` filter or a follow-up page) to confirm `alertTier` changed. Report what changed and what was skipped.
+Only after the user confirms — per table, or "all listed" — call `update_table_priority` for each confirmed table with the suggested tier, then re-read with `list_table_scores` using the **same `project`/`dataset` scope as Step 0** and `alertTiers = ["PRIORITY", "CRITICAL"]` to confirm `alertTier` changed — the Step 1 `REGULAR` filter would otherwise drop the just-changed table out of the result. Report what changed and what was skipped.
 
 ## Guardrails
 
 * Never lower a tier.
+* Raise-only, and only from REGULAR: Step 1 lists REGULAR (and MUTED) candidates only, so this skill never raises an existing PRIORITY table to CRITICAL. Known limitation — mention it if the user expects a full re-tiering pass.
 * Never change a MUTED table without a per-table yes from the user.
 * Never call `update_table_priority` for a table that was not in the reviewed list.
 * Percentiles are tenant-relative; do not compare scores across tenants or quote them as absolute importance.
