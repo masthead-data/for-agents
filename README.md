@@ -44,7 +44,7 @@ If you are an AI coding agent asked to set up Masthead tools, do exactly this:
 
 1. Detect which client you are running in (Claude Code, Codex, Antigravity) and follow only that subsection under [Installation](#installation).
 2. Plugins load at startup. After installing, stop and tell the user to **restart the client**.
-3. The `masthead` MCP server needs a one-time browser sign-in the user must do: Claude Code `/mcp` → authenticate `masthead`; Codex `codex mcp login masthead`; Antigravity Agent Settings → Customizations → `masthead` → Authenticate. A `401 Unauthorized` from any tool means this step is missing. UK-hosted tenants use `https://mcp-uk.mastheadata.com/mcp` instead of the US URL.
+3. The `masthead` MCP server needs a one-time browser sign-in the user must do: Claude Code `/mcp` → authenticate `masthead`; Codex `codex mcp login masthead`; Antigravity Agent Settings → Customizations → `masthead` → Authenticate. A `401 Unauthorized` from any tool means this step is missing.
 4. Tell the user the first command to run after restart: the triage workflow works for every tenant; the FinOps workflow additionally needs the BigQuery insights export enabled (the skill checks this via `get_tenant_settings` and stops with a link if it is not).
 5. Do not run any workflow in the session that installed the plugin — it cannot see the plugin yet.
 
@@ -116,7 +116,7 @@ npx skills add masthead-data/for-agents --skill masthead-storage-savings-with-ta
 
 - **Masthead Account & Dataset**: A provisioned Masthead insights dataset in BigQuery. [Request access →](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)
 - **Google Cloud CLI**: Authenticated via `gcloud auth login` with BigQuery read permissions.
-- **MCP Server Authentication**: The Masthead MCP server (`https://mcp.mastheadata.com/mcp`, UK: `https://mcp-uk.mastheadata.com/mcp`) authenticates via Google OAuth 2.0 in your agent client — see the setup checklist above for the per-client command (service account support coming soon).
+- **MCP Server Authentication**: The Masthead MCP server (`https://mcp.mastheadata.com/mcp`) authenticates via Google OAuth 2.0 in your agent client — see the setup checklist above for the per-client command (service account support coming soon).
 
 FinOps skills resolve your insights dataset through the `get_tenant_settings` MCP tool (dataset name, export enabled flag, look-back window). Without MCP, set `MASTHEAD_INSIGHTS_DATASET` or put the dataset into `~/.masthead/config.json` / `.masthead/config.json`; the skill asks once otherwise.
 
