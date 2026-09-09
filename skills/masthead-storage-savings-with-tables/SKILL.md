@@ -18,11 +18,17 @@ Identify and remove BigQuery tables that contribute to storage costs but have no
 
 Masthead Data uses lineage analysis to identify tables, but relies on visible pipeline references. Modification timestamps are critical:
 
-| Type              | Definition                                                                                        | Indicators                         | Watch for                                                                                                                         |
-| ----------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **Leaf dead-end** | Leaf table in a dead-end chain — regularly updated, no downstream consumers. Directly actionable. | Updated but never read in 30+ days | External writers outside lineage graph (manual jobs, independent pipelines)                                                       |
-| **Dead-end**      | Upstream table or pipeline that contributes solely to a dead-end chain                            | Feeds only into dead-end tables    | May become resolvable once the leaf dead-end is dropped; re-evaluate after leaf removal                                           |
-| **Unused**        | No upstream or downstream activity                                                                | No reads/writes in 30+ days        | Recent `last_modified_time` (in query output) despite "Unused" flag suggests external writer—**do not drop without verification** |
+| Type | Definition | Indicators | Watch for |
+| --- | --- | --- | --- |
+| **Leaf dead-end** | Leaf table in a dead-end chain — regularly updated, no downstream consumers. Directly actionable. | Updated but never read in the look-back window | External writers outside lineage graph (manual jobs, independent pipelines) |
+| **Dead-end** | Upstream table or pipeline that contributes solely to a dead-end chain | Feeds only into dead-end tables | May become resolvable once the leaf dead-end is dropped; re-evaluate after leaf removal |
+| **Unused** | No upstream or downstream activity | No reads/writes in the look-back window | Recent `last_modified_time` (in query output) despite "Unused" flag suggests external writer—**do not drop without verification** |
+
+The look-back window is the tenant's `dataUsageLookBackDays` from `get_tenant_settings` (30 days unless Masthead configured otherwise). A table modified inside that window but still flagged `Unused` has a writer Masthead cannot see.
+
+**Pattern parents:** `target_resource` may be a wildcard such as `project.dataset.events_*` — Masthead collapses date-sharded siblings into one row whose `num_bytes`, `cost_30d`, and `savings_30d` are summed over the children. `bq rm` does not expand wildcards; see Step 3 for how to list the real tables.
+
+**No billed cost:** `cost_30d` is NULL when Masthead sees no storage bill for the table in your project — a dataset you *subscribe* to rather than own (Analytics Hub listing, Cloud Logging linked bucket), an external table, or a table that no longer exists. Such a row is not a saving: classify it `keep`, do not size it by `total_tib` however large, and never emit a `bq rm` for it. If it is a subscription, the only possible action is unsubscribing from the listing, which is outside this skill.
 
 ### Key Signal
 
@@ -46,10 +52,12 @@ This skill operates strictly in an advisory capacity:
 
 ### Step 0: Dataset Context
 
-Ensure access to your Masthead insights dataset in BigQuery:
+Resolve the Masthead insights dataset before querying. It always lives in the `masthead-prod` project; only the dataset name is per-tenant.
 
-- **Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (see [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md) and [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md)).
-- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache it per their preference (global `~/.masthead/config.json` recommended).
+1. **Masthead MCP connected** (preferred): call `get_tenant_settings`. Use `insightsDataset.project` + `insightsDataset.dataset` as `<DATASET_NAME>` (for example `masthead-prod.mastheadata`). If `insightsDataset.enabled` is `false`, stop and tell the user BigQuery export is not enabled for their tenant ([request access](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)). Keep `dataUsageLookBackDays` — it is the window Masthead used to flag tables (30 by default). Cache the dataset in `~/.masthead/config.json` (or `.masthead/config.json` per the user's preference).
+2. **No MCP**: check `$MASTHEAD_INSIGHTS_DATASET`, then global `~/.masthead/config.json`, then local `.masthead/config.json`. If none is set, ask the user once and cache it.
+
+`YOUR_PROJECT` in the commands below is the **user's own GCP project** that bills and authorizes the `bq` jobs (`gcloud config get-value project`) — never `masthead-prod`, customers cannot run jobs there. Reference: [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md), [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md).
 
 ### Step 1: Query Storage Waste
 
@@ -68,10 +76,10 @@ FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
   AND subtype IN ('Dead end table', 'Leaf dead end table', 'Unused table')
   AND overview.num_bytes IS NOT NULL
-ORDER BY savings_usd_30d DESC"
+ORDER BY savings_usd_30d DESC NULLS LAST"
 ```
 
-**Note:** `cost_30d` and `savings_30d` may be null — `total_tib` is the reliable sizing signal. Include `last_modified_time` to detect external writers (see Key Signal above).
+**Note:** `savings_usd_30d` is the ranking signal; `total_tib` only sizes rows that have a cost. Rows with NULL `cost_usd_30d` sort last and are `keep` (see No billed cost above) — report them separately, never as candidates. Include `last_modified_time` to detect external writers (see Key Signal above).
 
 ### Step 2: Review and Decide
 
@@ -86,7 +94,7 @@ Review the retrieved list of candidates. The user or agent can choose the most o
 - Is this a backup or archive table?
 - Is there a downstream dependency not captured in lineage?
 - Is this table part of an active experiment or migration?
-- **For repo-managed projects:** Search the codebase (e.g., `grep` for table name in model definitions, scripts) to confirm ownership. Table naming can be misleading (e.g. may seem like current outputs but could be legacy).
+- **For repo-managed projects:** If the current working directory is a git repository, `grep` it for the table name in model definitions and scripts to confirm ownership; otherwise ask the user which repository owns the table rather than searching the filesystem. Table naming can be misleading (e.g. may seem like current outputs but could be legacy).
 - **Disable producers:** if there is a related pipeline code - it needs to be disabled to avoid regenerating the table after dropping.
 - **Inspect Live Metadata**: For ambiguous or high-value candidates, run the CLI equivalent of `table_get` to verify live row count, total bytes, labels, and exact `lastModifiedTime`:
 
@@ -100,6 +108,16 @@ The agent does **not** execute drop commands. Instead, generate the remediation 
 
 1. **Review Artifacts**: Provide a clear Markdown summary or CSV candidate list with table sizes, 30-day savings, and last modified dates.
 2. **Execution Script**: When requested, prepare a standalone shell script that inspects live table metadata before taking actions.
+3. **Expand pattern parents first**: a `target_resource` containing `*` is not a real table. Resolve it to concrete names before emitting any `bq show` / `bq rm` line, one command per child:
+
+   ```bash
+   # <pattern> is the part after the dataset, e.g. events_* or LR_9MCT0*_dataset_fields_history_pdt
+   bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=csv \
+   "SELECT table_name
+   FROM \`YOUR_PROJECT.YOUR_DATASET.INFORMATION_SCHEMA.TABLES\`
+   WHERE REGEXP_CONTAINS(table_name, r'^' || REPLACE('<pattern>', '*', '.*') || r'$')
+   ORDER BY table_name"
+   ```
 
 ### Step 4: Verify Savings
 

@@ -103,7 +103,8 @@ const MCP_CONFIGS = [
   {
     path: 'mcp.json',
     standard: 'Agent Plugins 1.0.0',
-    validateServer: (srv) => srv && (srv.url || srv.command)
+    requireSchema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
+    validateServer: (srv) => srv && ((srv.url && ['streamable-http', 'sse'].includes(srv.type)) || srv.command)
   },
   {
     path: 'mcp_config.json',
@@ -116,6 +117,10 @@ for (const mcp of MCP_CONFIGS) {
   const data = loadJson(mcp.path);
   if (!data) continue;
 
+  if (mcp.requireSchema && data.$schema !== mcp.requireSchema) {
+    error(`${mcp.path}: "$schema" must be ${mcp.requireSchema} (Codex refuses the file without it)`);
+    continue;
+  }
   const servers = data.mcpServers ? Object.entries(data.mcpServers) : [];
   if (servers.length === 0) {
     error(`${mcp.path}: "mcpServers" is empty or missing`);

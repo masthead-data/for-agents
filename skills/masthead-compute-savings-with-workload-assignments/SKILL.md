@@ -1,5 +1,5 @@
 ---
-name: masthead-compute-savings-with-data-models
+name: masthead-compute-savings-with-workload-assignments
 description: Optimize BigQuery compute costs by reassigning data models (Dataform, dbt, Airflow) or principals (service accounts, users) to slot reservations or on-demand compute based on Masthead recommendations without impacting performance.
 compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only permissions to run BigQuery jobs, access Masthead insight datasets, and view reservations.
 ---
@@ -32,10 +32,12 @@ This skill operates strictly in an advisory capacity:
 
 ### Step 0: Dataset Context & Target Resolution
 
-Ensure access to the Masthead insights dataset in BigQuery:
+Resolve the Masthead insights dataset before querying. It always lives in the `masthead-prod` project; only the dataset name is per-tenant.
 
-- **Table Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (e.g. `masthead-prod.hkm.insights`, `masthead-prod.realtruck.insights`).
-- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache per preference.
+1. **Masthead MCP connected** (preferred): call `get_tenant_settings`. Use `insightsDataset.project` + `insightsDataset.dataset` as `<DATASET_NAME>` (for example `masthead-prod.mastheadata`). If `insightsDataset.enabled` is `false`, stop and tell the user BigQuery export is not enabled for their tenant ([request access](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)). Cache the dataset in `~/.masthead/config.json` (or `.masthead/config.json` per the user's preference).
+2. **No MCP**: check `$MASTHEAD_INSIGHTS_DATASET`, then global `~/.masthead/config.json`, then local `.masthead/config.json`. If none is set, ask the user once and cache it.
+
+`YOUR_PROJECT` in the commands below is the **user's own GCP project** that bills and authorizes the `bq` jobs (`gcloud config get-value project`) — never `masthead-prod`, customers cannot run jobs there. Reference: [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md), [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md).
 
 ### Step 1: Pull & Filter Compute Recommendations
 
@@ -109,12 +111,12 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
 
 | Recommendation Action | SQL DDL | Terraform | bq CLI | Detailed Reference |
 | :--- | :--- | :--- | :--- | :--- |
-| `CREATE_RESERVATION` | [`CREATE RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_reservation) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) *(when SQL/TF unavailable)* | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#1-create_reservation) |
-| `ALTER_RESERVATION` | [`ALTER RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_reservation) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update) *(when SQL/TF unavailable)* | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#2-alter_reservation) |
-| `ENABLE_FLUID_AUTOSCALING` | [`ALTER PROJECT SET OPTIONS`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_project) | [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) (executes SQL) | [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query) (executes SQL) | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#3-enable_fluid_autoscaling) |
-| `ALLOW_FLEXIBLE_ASSIGNMENT` | *N/A (No SQL DDL for reservation IAM)* | [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) *(with IAM condition)* | [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) | [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment) |
-| `RESERVATION_CONFIG` (`PRINCIPAL`) | [`CREATE ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) / [`DROP ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment) | [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment) | [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) *(when SQL/TF unavailable)* | [principal-routing.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/principal-routing.md) |
-| `RESERVATION_CONFIG` (`DAG_MODEL`) | Orchestration packages | Dataform / dbt / Airflow package config | *N/A* | [orchestration-templates.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/orchestration-templates.md) |
+| `CREATE_RESERVATION` | [`CREATE RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_reservation) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) *(when SQL/TF unavailable)* | [reservation-operations.md](references/reservation-operations.md#1-create_reservation) |
+| `ALTER_RESERVATION` | [`ALTER RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_reservation) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update) *(when SQL/TF unavailable)* | [reservation-operations.md](references/reservation-operations.md#2-alter_reservation) |
+| `ENABLE_FLUID_AUTOSCALING` | [`ALTER PROJECT SET OPTIONS`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_project) | [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) (executes SQL) | [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query) (executes SQL) | [reservation-operations.md](references/reservation-operations.md#3-enable_fluid_autoscaling) |
+| `ALLOW_FLEXIBLE_ASSIGNMENT` | *N/A (No SQL DDL for reservation IAM)* | [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) *(with IAM condition)* | [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) | [reservation-operations.md](references/reservation-operations.md#4-allow_flexible_assignment) |
+| `RESERVATION_CONFIG` (`PRINCIPAL`) | [`CREATE ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) / [`DROP ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment) | [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment) | [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) *(when SQL/TF unavailable)* | [principal-routing.md](references/principal-routing.md) |
+| `RESERVATION_CONFIG` (`DAG_MODEL`) | Orchestration packages | Dataform / dbt / Airflow package config | *N/A* | [orchestration-templates.md](references/orchestration-templates.md) |
 
 ### 1. Reservation Configuration (`CREATE_RESERVATION` / `ALTER_RESERVATION`)
 
@@ -124,7 +126,7 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
   1. **SQL DDL**: Native BigQuery SQL ([`CREATE RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_reservation) / [`ALTER RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_reservation)).
   2. **Terraform**: Declarative resource [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation).
   3. **bq CLI**: [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) or [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update) when SQL DDL or Terraform is not available.
-- **Details & Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#1-create_reservation).
+- **Details & Syntax**: See [reservation-operations.md](references/reservation-operations.md#1-create_reservation).
 
 ### 2. Fluid Autoscaling (`ENABLE_FLUID_AUTOSCALING`)
 
@@ -134,7 +136,7 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
   1. **SQL DDL**: Native BigQuery SQL ([`ALTER PROJECT SET OPTIONS`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_project)).
   2. **Terraform**: `terraform_data` provisioner executing the DDL.
   3. **bq CLI**: [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query) executing the DDL.
-- **Details & SQL Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#3-enable_fluid_autoscaling).
+- **Details & SQL Syntax**: See [reservation-operations.md](references/reservation-operations.md#3-enable_fluid_autoscaling).
 
 ### 3. Permissions (`ALLOW_FLEXIBLE_ASSIGNMENT`)
 
@@ -142,7 +144,7 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
 - **Implementation Hierarchy** *(Note: BigQuery does not support SQL DDL for reservation-scoped IAM; the Terraform provider does not include a dedicated reservation IAM resource)*:
   1. **Terraform**: Declarative resource [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) with an IAM condition restricting `resource.name` to the specific reservation.
   2. **bq CLI**: Imperative [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy).
-- **Details & Syntax**: See [reservation-operations.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/reservation-operations.md#4-allow_flexible_assignment).
+- **Details & Syntax**: See [reservation-operations.md](references/reservation-operations.md#4-allow_flexible_assignment).
 
 ### 4. Workload Routing (`RESERVATION_CONFIG`)
 
@@ -152,12 +154,12 @@ Routes target workloads to the designated reservation or on-demand (`"none"`):
   - **Dataform**: Configure `definitions/_reservations.js` via `@masthead-data/dataform-package`.
   - **dbt**: Configure `dbt_project.yml` via `masthead-data/bq_reservations`.
   - **Airflow**: Configure `reservations_config.json` via `airflow-reservations`.
-  - *Full package setups and code examples*: See [orchestration-templates.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/orchestration-templates.md).
+  - *Full package setups and code examples*: See [orchestration-templates.md](references/orchestration-templates.md).
 - **For Principals (`PRINCIPAL`)**: Implement identity-level routing:
   1. **SQL DDL**: Native BigQuery SQL DDL ([`CREATE ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) / [`DROP ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment)) or session variable ([`SET @@reservation`](https://cloud.google.com/bigquery/docs/reference/standard-sql/system-variables)).
   2. **Terraform**: Declarative resource [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment).
   3. **bq CLI**: [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) (with `--principal`) and [`bq rm --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_rm) when SQL DDL or Terraform is not available.
-  - *Full commands, Terraform resources, and session examples*: See [principal-routing.md](file:///Users/maxostapenko/masthead/for-agents/skills/masthead-compute-savings-with-data-models/references/principal-routing.md).
+  - *Full commands, Terraform resources, and session examples*: See [principal-routing.md](references/principal-routing.md).
 
 ---
 

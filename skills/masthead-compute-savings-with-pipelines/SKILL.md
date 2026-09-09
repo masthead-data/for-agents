@@ -31,32 +31,37 @@ This skill operates strictly in an advisory capacity:
 
 ### Step 0: Dataset Context
 
-Ensure access to your Masthead insights dataset in BigQuery:
+Resolve the Masthead insights dataset before querying. It always lives in the `masthead-prod` project; only the dataset name is per-tenant.
 
-- **Location**: Exported under `masthead-prod.<DATASET_NAME>.insights` (see [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md) and [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md)).
-- **Resolution**: Check `$MASTHEAD_INSIGHTS_DATASET`, global `~/.masthead/config.json`, or local `.masthead/config.json`. If not set, ask the user once and cache it per their preference (global `~/.masthead/config.json` recommended).
+1. **Masthead MCP connected** (preferred): call `get_tenant_settings`. Use `insightsDataset.project` + `insightsDataset.dataset` as `<DATASET_NAME>` (for example `masthead-prod.mastheadata`). If `insightsDataset.enabled` is `false`, stop and tell the user BigQuery export is not enabled for their tenant ([request access](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)). Cache the dataset in `~/.masthead/config.json` (or `.masthead/config.json` per the user's preference).
+2. **No MCP**: check `$MASTHEAD_INSIGHTS_DATASET`, then global `~/.masthead/config.json`, then local `.masthead/config.json`. If none is set, ask the user once and cache it.
+
+`YOUR_PROJECT` in the commands below is the **user's own GCP project** that bills and authorizes the `bq` jobs (`gcloud config get-value project`) — never `masthead-prod`, customers cannot run jobs there. Reference: [Masthead BigQuery API Overview](https://docs.mastheadata.com/developer/api.md), [Insights Table Reference](https://docs.mastheadata.com/developer/api/insights.md).
 
 ### Step 1: Query Compute Waste from Pipelines
+
+A pipeline row is identified by the principal that runs it and the table it writes (`target_resource` = destination). There is no separate pipeline id in the export.
 
 ```bash
 bq query --project_id=YOUR_PROJECT --use_legacy_sql=false --format=pretty \
 "SELECT
   subtype,
   project_id,
-  target_resource,
-  SAFE.STRING(overview.technology) AS technology,
-  SAFE.STRING(overview.model_id) AS model_id,
-  SAFE.STRING(overview.masthead_pipeline_id) AS masthead_pipeline_id,
+  target_resource AS destination,
+  SAFE.STRING(overview.destination_type) AS destination_type,
+  SAFE.STRING(overview.resource_technology) AS technology,
+  SAFE.STRING(overview.principal_name) AS principal,
   SAFE.FLOAT64(overview.cost_30d) AS cost_usd_30d,
   SAFE.FLOAT64(overview.savings_30d) AS savings_usd_30d,
-  SAFE.INT64(overview.billed_slot_ms_30d) AS billed_slot_ms_30d,
-  SAFE.INT64(overview.billed_bytes_30d) AS billed_bytes_30d,
   last_updated_time
 FROM \`masthead-prod.<DATASET_NAME>.insights\`
 WHERE category = 'Cost'
-  AND (subtype LIKE '%pipeline%' OR (type = 'Dead end' AND subtype = 'Dead end pipeline'))
+  AND type = 'Dead end'
+  AND subtype IN ('Dead end pipeline', 'Leaf dead end pipeline')
 ORDER BY savings_usd_30d DESC"
 ```
+
+`Leaf dead end pipeline` writes a table nobody reads — directly actionable. `Dead end pipeline` feeds only other dead-end tables — re-evaluate after the leaf is gone. `technology` is Masthead's detected tool (`Dataform`, `DBT`, `Airflow`, `BQ DTS`, `Spark`, `Airbyte`, `Browser`, …) and picks the section in Step 3.
 
 ### Step 2: Review and Decide
 
@@ -69,7 +74,7 @@ Review the retrieved list of candidates. The user or agent can choose the most o
 **Review criteria:**
 
 - **Lineage Gaps:** Does the target table have external consumers (e.g., connected sheets, BI tools, external APIs) that are not tracked in the lineage graph?
-- **Code Search:** Search the repository to locate where the pipeline/model is defined (e.g., search for the table name or `model_id` / `masthead_pipeline_id`).
+- **Code Search:** If the current working directory is a git repository, grep it for the destination table name; the `principal` (service account) usually narrows it to one orchestrator or CI job. If it is not a repository, ask the user which repository holds the pipeline instead of searching the filesystem.
 - **Multiple Writers:** Check if other pipelines or manual queries write to the same table.
 
 ### Step 3: Generate Deactivation Artifacts (User-Executed)
@@ -81,7 +86,7 @@ Prepare the configuration diffs, commands, or documentation requested by the use
 
 #### Dataform
 
-1. Locate the SQLX file defining the model in the repository (e.g., search for `name: "model_id"` or `target_resource` table name).
+1. Locate the SQLX file defining the model in the repository (search for the destination table name).
 2. Add `disabled: true` in the `config { ... }` block of the SQLX file:
 
    ```javascript
@@ -96,7 +101,7 @@ Prepare the configuration diffs, commands, or documentation requested by the use
 
 #### dbt
 
-1. Locate the model YAML or SQL file in the dbt project matching `model_id`.
+1. Locate the model SQL file in the dbt project that materializes the destination table.
 2. Disable the model by adding `enabled: false` to its config block:
 
    ```sql
@@ -114,7 +119,7 @@ Prepare the configuration diffs, commands, or documentation requested by the use
 
 #### Airflow
 
-1. Locate the DAG file defining the workflow matching `model_id` or the task writing to `target_resource`.
+1. Locate the DAG file whose task writes to the destination table (the `principal` is typically the Composer/Airflow service account).
 2. If the entire DAG is unused or dead-end:
    - Pause the DAG in the Airflow UI, or
    - Set `is_paused_upon_creation=True` in the DAG definition in code.
@@ -153,13 +158,13 @@ Prepare the configuration diffs, commands, or documentation requested by the use
 
 ### Step 5: Verify Savings
 
-1. Verify that the pipeline has stopped executing by checking the BigQuery job history for references to `target_resource` or `model_id`.
+1. Verify that the pipeline has stopped executing by checking the BigQuery job history for jobs by `principal` writing to the destination table.
 2. Monitor compute savings in the Masthead UI after 24-48 hours.
 
 ## Related Optimizations
 
 - **Table Cleanup**: Drop the orphan tables left behind by disabled pipelines (`masthead-storage-savings-with-tables`).
-- **Compute Reservations**: Re-assign active pipelines to appropriate reservations or on-demand pricing (`masthead-compute-savings-with-data-models`).
+- **Compute Reservations**: Re-assign active pipelines to appropriate reservations or on-demand pricing (`masthead-compute-savings-with-workload-assignments`).
 
 ## Documentation
 

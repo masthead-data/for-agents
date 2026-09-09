@@ -12,7 +12,7 @@ This skill instructs agents on how to triage, analyze, and resolve BigQuery data
 
 ## Prerequisites
 
-* Active connection to the Masthead MCP server: `https://mcp.mastheadata.com/mcp`.
+* Active connection to the Masthead MCP server: `https://mcp.mastheadata.com/mcp`. A `401 Unauthorized` from any tool means the server is not signed in yet: run `/mcp` in Claude Code or `codex mcp login masthead` in Codex, then retry — no token or service account is needed.
 * Valid bearer token auth or service account configuration.
 * For client setup guides and configuration templates, refer to the [Masthead MCP Server Setup Documentation](https://docs.mastheadata.com/developer/mcp/) and the [MCP Tools Reference](https://docs.mastheadata.com/developer/mcp/tools).
 
@@ -50,15 +50,15 @@ Before querying incidents, retrieve the list of active GCP project IDs monitored
 
 #### 2. Scan Incidents
 
-Fetch active anomalies and pipeline issues. Try to minimize the scope of your query by filtering with project IDs, technologies, and date ranges to find relevant incidents faster.
+Fetch active anomalies and pipeline issues. Start narrow and widen only when the narrow call returns nothing:
 
+* **First call**: `list_incidents` with `statuses` = `OPEN`, `alertTiers` = `CRITICAL`, `PRIORITY`, `from` = 3 days ago, `limit` = 50. Never open with an unfiltered `list_open_incidents`: on a busy tenant it returns thousands of rows that do not fit in context.
+* `total` in the response tells you how much noise exists — it is not an instruction to fetch it all. Paginate only within the filtered set, and only while the pages still hold incidents you intend to act on.
 * The statuses `OPEN`, `IN_PROGRESS`, `ACKNOWLEDGED` require attention, while `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered resolved or non-actionable.
 * Filter the alertTiers to `CRITICAL` or `PRIORITY` to focus on high-impact incidents first.
 * When filtering by date, start with the most recent dates (e.g., last 3 days) to find ongoing incidents, and expand the range if needed to find related past incidents.
 * Based on the access to particular technologies (e.g., dbt, Airflow), filter by pipelineTypes to find relevant pipeline failure incidents.
 * Development or staging projects (or the ones where there is no access) may have many non-actionable incidents that can create noise, so prioritize production projects first.
-* If the total number of incidents exceeds the returned items, paginate through results to ensure you don't miss relevant incidents.
-
 * **Tool**: `list_incidents` (`list_open_incidents` returns only the incidents that require attention)
 * **Key Arguments**: `project`, `pipelineTypes`, `alertTiers`, `statuses`, `dataset`, `from`, `to`, `page`, `limit`
 * **Example Prompt**: *"Show incidents in project your-project-id."*
@@ -88,6 +88,14 @@ Check columns count, table type, and active anomaly statuses.
 #### 2. Identify Upstream Writers / Pipelines
 
 Determine what process or pipeline writes to the target table to see if a pipeline rerun or schedule adjustment is necessary.
+
+The error text in `get_incident_details` is **history** — it records what failed at detection time, not what is failing now. Before naming a root cause, compare it with the writer's latest run from `get_table_pipelines`:
+
+* Writer ran successfully **after** the incident's detection time → the cause is already fixed; the incident is a closing candidate, not an escalation.
+* No run at all since detection → the question is why the pipeline stopped (schedule, disabled action, upstream gate), not why it failed.
+* Writer still failing → the error text is current; proceed with it.
+
+Read direction carefully: `get_table_pipelines` returns the **writer**; pipelines in `get_table_lineage` that read the table are consumers and say nothing about the table's own freshness.
 
 * **Tool**: `get_table_pipelines`
 * **Key Arguments**: `project`, `dataset`, `table`
@@ -154,7 +162,7 @@ For important data assets, elevate its monitoring tier to `PRIORITY` or `CRITICA
 * **Verify IDs**: Always invoke `list_projects` and `list_users` first to verify project and email values before executing queries or assignments.
 * **Triage Order**: Always perform Phase 1 (Triage) and Phase 2 (Impact Analysis) before proposing Phase 3 (Mitigation) updates.
 * **Human Review**: Do not silently update incidents without displaying the current state and getting user confirmation first.
-* **Pagination & Large Datasets**: When retrieving list data (e.g., using `list_open_incidents` or `list_incidents`), pay close attention to the `total` number of records in the response. If the `total` count is larger than the number of returned items (e.g., limit is reached), you **MUST** paginate using the `page` (1-indexed) and `limit` parameters to explore all relevant items. Do not assume the first page contains all incidents.
+* **Pagination & Large Datasets**: `total` larger than the returned items means more pages exist for the *filtered* query — page through them with `page` (1-indexed) and `limit` while they still hold actionable incidents. Never widen the filter or raise `limit` just to reach `total`.
 
 ---
 
