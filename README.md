@@ -27,12 +27,26 @@ All FinOps skills adhere to strict non-action principles:
 
 ## Slash Commands
 
-When installed in Claude Code or Antigravity, quick slash commands are available:
+The plugin ships two workflows. Names differ per client:
 
-- `/triage` — Launch real-time incident triaging, upstream lineage inspection, and blast-radius analysis across monitored GCP projects.
-- `/savings` — Audit BigQuery storage and compute waste across tables, datasets, data models, and pipelines.
+| Workflow | Claude Code | Codex | Antigravity |
+| --- | --- | --- | --- |
+| Incident triage — open incidents, upstream lineage, blast radius, mitigation plan | `/masthead-agent-tools:triage` | `$masthead-agent-tools:masthead-triage` | `/masthead-triage` |
+| FinOps audit — dead-end and unused tables, dataset billing models, pipelines, data models | `/masthead-agent-tools:savings` | `$masthead-agent-tools:masthead-savings` | `/masthead-savings` |
 
-Codex has no plugin commands; the same workflows ship as skills you invoke explicitly: `$masthead-triage` and `$masthead-savings`.
+Both accept an optional scope after the name, for example `… savings tables in project my-project`, `… savings datasets`, `… triage incident <uuid>`, `… triage table project.dataset.table`.
+
+---
+
+## For coding agents: setup checklist
+
+If you are an AI coding agent asked to set up Masthead tools, do exactly this:
+
+1. Detect which client you are running in (Claude Code, Codex, Antigravity) and follow only that subsection under [Installation](#installation).
+2. Plugins load at startup. After installing, stop and tell the user to **restart the client**.
+3. The `masthead` MCP server needs a one-time browser sign-in the user must do: Claude Code `/mcp` → authenticate `masthead`; Codex `codex mcp login masthead`; Antigravity Agent Settings → Customizations → `masthead` → Authenticate. A `401 Unauthorized` from any tool means this step is missing. UK-hosted tenants use `https://mcp-uk.mastheadata.com/mcp` instead of the US URL.
+4. Tell the user the first command to run after restart: the triage workflow works for every tenant; the FinOps workflow additionally needs the BigQuery insights export enabled (the skill checks this via `get_tenant_settings` and stops with a link if it is not).
+5. Do not run any workflow in the session that installed the plugin — it cannot see the plugin yet.
 
 ---
 
@@ -102,9 +116,9 @@ npx skills add masthead-data/for-agents --skill masthead-storage-savings-with-ta
 
 - **Masthead Account & Dataset**: A provisioned Masthead insights dataset in BigQuery. [Request access →](https://docs.mastheadata.com/api#get-access-to-bigquery-resources)
 - **Google Cloud CLI**: Authenticated via `gcloud auth login` with BigQuery read permissions.
-- **MCP Server Authentication**: The Masthead MCP server at `https://mcp.mastheadata.com/mcp` authenticates via native Google OAuth 2.0 popup in your agent client (service account support coming soon).
+- **MCP Server Authentication**: The Masthead MCP server (`https://mcp.mastheadata.com/mcp`, UK: `https://mcp-uk.mastheadata.com/mcp`) authenticates via Google OAuth 2.0 in your agent client — see the setup checklist above for the per-client command (service account support coming soon).
 
-When a FinOps skill runs for the first time, it prompts for your insights dataset ID (e.g. `masthead-prod.client_xyz_insights`) and caches it into your global (`~/.masthead/config.json`) or project config (`.masthead/config.json`).
+FinOps skills resolve your insights dataset through the `get_tenant_settings` MCP tool (dataset name, export enabled flag, look-back window). Without MCP, set `MASTHEAD_INSIGHTS_DATASET` or put the dataset into `~/.masthead/config.json` / `.masthead/config.json`; the skill asks once otherwise.
 
 ---
 
