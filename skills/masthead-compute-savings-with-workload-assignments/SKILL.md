@@ -155,7 +155,7 @@ Routes target workloads to the designated reservation or on-demand (`"none"`):
   - **dbt**: Configure `dbt_project.yml` via `masthead-data/bq_reservations`.
   - **Airflow**: Configure `reservations_config.json` via `airflow-reservations`.
   - *Full package setups and code examples*: See [orchestration-templates.md](references/orchestration-templates.md).
-- **For Principals (`PRINCIPAL`)**: Implement identity-level routing:
+- **For Principals (`PRINCIPAL`)**: Implement identity-level routing. Each `principals[]` element carries `principal` (assignment identifier), `source_project` (assignee project) and `job_type` (`QUERY` | `PIPELINE`)—one `CREATE ASSIGNMENT` per element, values verbatim:
   1. **SQL DDL**: Native BigQuery SQL DDL ([`CREATE ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) / [`DROP ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment)) or session variable ([`SET @@reservation`](https://cloud.google.com/bigquery/docs/reference/standard-sql/system-variables)).
   2. **Terraform**: Declarative resource [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment).
   3. **bq CLI**: [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) (with `--principal`) and [`bq rm --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_rm) when SQL DDL or Terraform is not available.

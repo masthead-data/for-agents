@@ -4,6 +4,32 @@ This reference covers routing identity-based BigQuery workloads (`PRINCIPAL`) to
 
 When `operations` contains a `RESERVATION_CONFIG` action with `principals` (instead of `models`/`technology`), queries run by those service accounts or user identities are reassigned.
 
+Each element of `principals` is one BigQuery assignment to create, with every `OPTIONS` value precomputed:
+
+```json
+{
+  "action": "RESERVATION_CONFIG",
+  "reservation": "projects/ADMIN_PROJECT/locations/EU/reservations/RESERVATION_ID",
+  "principals": [
+    {
+      "email": "etl-runner@my-project.iam.gserviceaccount.com",
+      "principal": "principal://iam.googleapis.com/projects/-/serviceAccounts/etl-runner@my-project.iam.gserviceaccount.com",
+      "source_project": "my-project",
+      "job_type": "PIPELINE"
+    }
+  ]
+}
+```
+
+| Field | Use as |
+| --- | --- |
+| `principal` | the `principal` option verbatim (`principal://goog/subject/…` for users, `principal://iam.googleapis.com/projects/-/serviceAccounts/…` for service accounts) |
+| `source_project` | `assignee = 'projects/<source_project>'`—the project the principal's jobs run in, not the admin project |
+| `job_type` | the `job_type` option: `QUERY` or `PIPELINE` (load, copy, extract). A principal running both kinds appears twice, once per kind—create both assignments |
+| `email` | display only; never derive `principal` from it yourself |
+
+`reservation` may name a reservation that does not exist yet (`BQ_ADMIN_PROJECT` / `RESERVATION_ID` placeholders): create it first with the row's `CREATE_RESERVATION` action, then use the same name here.
+
 ---
 
 > [!IMPORTANT]
@@ -21,14 +47,12 @@ Documentation: [BigQuery SQL CREATE ASSIGNMENT](https://cloud.google.com/bigquer
 ### Assign Principal to Reservation
 
 ```sql
+-- one statement per element of `principals`; values come from the element's fields
 CREATE ASSIGNMENT `ADMIN_PROJECT.region-LOCATION.RESERVATION_ID.ASSIGNMENT_NAME`
 OPTIONS (
-  assignee = 'projects/TARGET_PROJECT',
-  job_type = 'QUERY',
-  -- For service accounts:
-  principal = 'principal://iam.googleapis.com/projects/-/serviceAccounts/runner-sa@PROJECT.iam.gserviceaccount.com'
-  -- For users:
-  -- principal = 'principal://goog/subject/user@domain.com'
+  assignee = 'projects/<source_project>',
+  job_type = '<job_type>',            -- QUERY or PIPELINE
+  principal = '<principal>'           -- principal://… string from the element
 );
 ```
 
