@@ -21,6 +21,8 @@ Reduce BigQuery storage costs by acting at the dataset level — switching stora
 
 Before switching a dataset to physical storage billing, drop unused/dead-end tables first. Physical billing includes costs for **time-travel and fail-safe storage**, so removing tables beforehand avoids paying for their retention. Run `masthead-storage-savings-with-tables` before this skill if you haven't already.
 
+Never write a `bq rm` in this skill. Table names that Masthead reports for a dataset may be wildcard pattern parents (for example `LR_9MCT0*_dataset_fields_history_pdt`), which `bq rm` cannot expand; the tables skill resolves them through `INFORMATION_SCHEMA.TABLES` and emits one command per real table. Hand the dataset to that skill instead of drafting drop commands here.
+
 ## Operating Mode: Cautious Advisory (Non-Action)
 
 This skill operates strictly in an advisory capacity:
