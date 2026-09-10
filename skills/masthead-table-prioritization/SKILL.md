@@ -30,6 +30,8 @@ Find tables that matter to the tenant but are still on default monitoring, propo
 
 Use the raw `metrics` to say *why* a table ranks high: name the one or two signals that dominate.
 
+Tables with a score of 0 have no observed signal and are not ranked at all (they never appear in `values` and do not count toward percentiles); on large tenants they are the vast majority.
+
 `alertType` is the table's current monitoring tier: `REGULAR` (default), `MUTED` (anomalies not alerted), `PRIORITY`, `CRITICAL`.
 
 ## Workflow
