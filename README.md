@@ -127,7 +127,7 @@ FinOps skills resolve your insights dataset through the `get_tenant_settings` MC
 | Skill | Category | Mode | Description |
 | --- | --- | --- | --- |
 | [`masthead-incident-triaging`](skills/masthead-incident-triaging/) | Observability | MCP | Triage, trace upstream/downstream lineage, assign ownership, and manage live incidents. |
-| [`masthead-table-prioritization`](skills/masthead-table-prioritization/) | Observability | MCP | Suggest PRIORITY/CRITICAL tiers from asset scores with metric-based reasons; apply on confirmation. |
+| [`masthead-asset-prioritization`](skills/masthead-asset-prioritization/) | Observability | MCP | Propose PRIORITY/CRITICAL (or REGULAR) tiers for tables and BI assets from asset scores, with reasons; apply on confirmation. |
 | [`masthead-storage-savings-with-tables`](skills/masthead-storage-savings-with-tables/) | FinOps | Local SQL | Identify and clean up dead-end and unused BigQuery tables. |
 | [`masthead-storage-savings-with-datasets`](skills/masthead-storage-savings-with-datasets/) | FinOps | Local SQL | Optimize dataset-level billing models (logical vs. physical) and partition expiration. |
 | [`masthead-compute-savings-with-workload-assignments`](skills/masthead-compute-savings-with-workload-assignments/) | FinOps | Local SQL | Rebalance Dataform, dbt, and Airflow model compute between reservations and on-demand. |
