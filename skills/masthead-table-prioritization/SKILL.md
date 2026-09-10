@@ -30,7 +30,7 @@ Find tables that matter to the tenant but are still on default monitoring, propo
 
 Use the raw `metrics` to say *why* a table ranks high: name the one or two signals that dominate.
 
-`alertTier` is the table's current monitoring tier: `REGULAR` (default), `MUTED` (anomalies not alerted), `PRIORITY`, `CRITICAL`.
+`alertType` is the table's current monitoring tier: `REGULAR` (default), `MUTED` (anomalies not alerted), `PRIORITY`, `CRITICAL`.
 
 ## Workflow
 
@@ -40,10 +40,10 @@ Take the scope from the user's request: a project, a dataset, and the percentile
 
 ### Step 1: Candidates
 
-1. `list_table_scores` with `alertTiers = ["REGULAR"]`, `minPercentile = <p>`, `limit = 200` (plus `project` / `dataset` when scoped). Fetch at most the first 2 pages (400 tables) — the report is a ranked shortlist, not the whole scope. Note `total` from the response and tell the user how many more tables sit above the cut.
+1. `list_table_scores` with `alertTiers = ["REGULAR"]`, `minPercentile = <p>`, `limit = 200` (plus `project` / `dataset` when scoped). Fetch at most the first 2 pages (400 tables) — the report is a ranked shortlist, not the whole scope. Rows come back in `values`; note `pagination.total` and tell the user how many more tables sit above the cut.
 2. `list_table_scores` again with `alertTiers = ["MUTED"]` and the same percentile, `limit = 200`, one page only. Keep these rows in a separate list; they are never candidates for a suggested tier.
 
-`percentiles.p50`/`p90`/`p95` are the tenant's score **values** at those percentiles (points on the 0–1 score scale), not ranks. Each item's own `percentile` is that table's **rank** within the tenant scope (0–100). Note `percentiles.p90` and `percentiles.p95` from the response; report them so the user sees where the cut sits.
+`extra.p50`/`p90`/`p95` are the tenant's score **values** at those percentiles (points on the 0–1 score scale), not ranks. Each item's own `percentile` is that table's **rank** within the tenant scope (0–100). Note `extra.p90` and `extra.p95` from the response; report them so the user sees where the cut sits.
 
 ### Step 2: Suggested tier and reason
 
@@ -64,7 +64,7 @@ Table `table | current tier | suggested tier | score | percentile | why`, highes
 
 ### Step 5: Apply (Action Mode only)
 
-Only after the user confirms — per table, or "all listed" — call `update_table_priority` for each confirmed table with the suggested tier, then re-read with `list_table_scores` using the **same `project`/`dataset` scope as Step 0** and `alertTiers = ["PRIORITY", "CRITICAL"]` to confirm `alertTier` changed — the Step 1 `REGULAR` filter would otherwise drop the just-changed table out of the result. Report what changed and what was skipped.
+Only after the user confirms — per table, or "all listed" — call `update_table_priority` for each confirmed table with the suggested tier, then re-read with `list_table_scores` using the **same `project`/`dataset` scope as Step 0** and `alertTiers = ["PRIORITY", "CRITICAL"]` to confirm `alertType` changed — the Step 1 `REGULAR` filter would otherwise drop the just-changed table out of the result. Report what changed and what was skipped.
 
 ## Guardrails
 
