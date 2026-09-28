@@ -154,7 +154,7 @@ After the user's yes, call `create_custom_data_scan` with the same arguments and
 
 ### Step 6: Manage existing scans
 
-* List: `list_custom_data_scans`. Only scans with `source` `api` can be changed; `manual` scans were set up by Masthead.
+* List: `list_custom_data_scans`. Only scans with `source` `API` can be changed; `MANUAL` scans were set up by Masthead.
 * `update_custom_data_scan` and `delete_custom_data_scan` take the scan's `scanId` — the `id` from `list_custom_data_scans`.
 * Pause or resume: `update_custom_data_scan` with `active` set to `false` or `true`.
 * Processing delay: `update_custom_data_scan` with `processDelayHours`.
