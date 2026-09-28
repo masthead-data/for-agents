@@ -51,7 +51,7 @@ The view returns these columns; extra columns are ignored. Examples: [references
 
 ### Step 1: Define the metric
 
-Agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, and the view name (snake_case, for example `orders_daily_volume`). Write the view SQL to the contract above. Read the source by its partition column where possible, so each run stays cheap.
+Agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, the view name (snake_case, for example `orders_daily_volume`), and optionally a `backfillFrom` date (`YYYY-MM-DD`) when the first run should analyze the 14 days before that date instead of the 14 days before today. Write the view SQL to the contract above. Read the source by its partition column where possible, so each run stays cheap.
 
 ### Step 2: Local checks (read-only)
 
@@ -72,13 +72,13 @@ Run with the user's credentials and fix every failure before any DDL:
      MIN(`timestamp`) AS min_timestamp,
      MAX(`timestamp`) AS max_timestamp,
      COUNTIF(NOT REGEXP_CONTAINS(table_reference, r'^[^.]+\.[^.]+\.[^.]+$')) AS malformed_table_references,
-     COUNTIF(table_reference IS NULL OR rule_name IS NULL OR value IS NULL) AS null_rows,
+     COUNTIF(table_reference IS NULL OR rule_name IS NULL OR `timestamp` IS NULL OR value IS NULL) AS null_rows,
      COUNTIF(`timestamp` > CURRENT_TIMESTAMP()) AS future_rows
    FROM (<view SQL>)
-   WHERE `timestamp` >= TIMESTAMP_SUB(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY), INTERVAL 14 DAY)
+   WHERE (`timestamp` >= TIMESTAMP_SUB(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY), INTERVAL 14 DAY) OR `timestamp` IS NULL)
    ```
 
-   `row_count` must be above 0, `malformed_table_references` and `null_rows` must be 0, `series` at most 1,000, and `min_timestamp` should reach back about 14 days. Raise `future_rows` above 0 with the user.
+   `row_count` must be above 0, `malformed_table_references` and `null_rows` must be 0, `series` at most 1,000, and `min_timestamp` should reach back about 14 days. Raise `future_rows` above 0 with the user. When `backfillFrom` is used, measure the window from that date instead of today.
 
 3. Read the location of every source dataset with `bq show --format=prettyjson <project>:<dataset>` (the `location` field). They must all match.
 
@@ -138,7 +138,7 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
 ### Step 4: Masthead-side dry run
 
-Call `create_custom_data_scan` with `view`, `name`, `frequency`, optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
+Call `create_custom_data_scan` with `view`, `name`, `frequency`, optional `processDelayHours` and `backfillFrom`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
 
 | The error says | Fix |
 | --- | --- |
@@ -155,6 +155,7 @@ After the user's yes, call `create_custom_data_scan` with the same arguments and
 ### Step 6: Manage existing scans
 
 * List: `list_custom_data_scans`. Only scans with `source` `api` can be changed; `manual` scans were set up by Masthead.
+* `update_custom_data_scan` and `delete_custom_data_scan` take the scan's `scanId` — the `id` from `list_custom_data_scans`.
 * Pause or resume: `update_custom_data_scan` with `active` set to `false` or `true`.
 * Processing delay: `update_custom_data_scan` with `processDelayHours`.
 * View or frequency: `update_custom_data_scan` with `view` or `frequency`. Warn first: this **deletes the scan's history and incidents** and analyzes it again from scratch. When the metric logic changes, create a new view and point the scan at it instead of editing the view in place, so old and new logic don't mix in the history.
