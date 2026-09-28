@@ -1,4 +1,4 @@
-# Custom Data Scan View Contract
+# Data Scan View Contract
 
 | Column | Type | Meaning |
 | --- | --- | --- |

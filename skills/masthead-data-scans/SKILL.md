@@ -1,27 +1,27 @@
 ---
-name: masthead-custom-data-scans
-description: Set up a custom data quality scan end to end — define a metric with the user, publish it as a BigQuery view in a `masthead_dq` dataset, give Masthead read access to that dataset only, then validate and create the scan through the Masthead MCP server. Also lists, pauses, updates, and deletes existing custom scans. Every BigQuery change and every scan change runs only on explicit confirmation.
+name: masthead-data-scans
+description: Set up a data quality scan end to end — define a metric with the user, publish it as a BigQuery view in a `masthead_dq` dataset, give Masthead read access to that dataset only, then validate and create the scan through the Masthead MCP server. Also lists, pauses, updates, and deletes existing scans. Every BigQuery change and every scan change runs only on explicit confirmation.
 compatibility: Requires the Masthead MCP server at `https://mcp.mastheadata.com/mcp` (US region) and the `bq` CLI signed in to the customer's Google Cloud project, with permission to create datasets and views and to change access on the source datasets.
 ---
 
-# Custom Data Scans
+# Data Scans
 
 ## Purpose
 
-Add a custom data quality scan to Masthead end to end. The user describes a metric; the skill turns it into a BigQuery view that follows Masthead's contract, publishes it in a dedicated `masthead_dq` dataset in the user's project, gives Masthead read access to that dataset only, and creates the scan through the Masthead MCP server. Masthead then reads the view on a schedule, learns the expected range of every metric, and raises a data quality incident when a value falls outside it. The skill also lists, pauses, updates, and deletes existing custom scans.
+Add a data quality scan to Masthead end to end. The user describes a metric; the skill turns it into a BigQuery view that follows Masthead's contract, publishes it in a dedicated `masthead_dq` dataset in the user's project, gives Masthead read access to that dataset only, and creates the scan through the Masthead MCP server. Masthead then reads the view on a schedule, learns the expected range of every metric, and raises a data quality incident when a value falls outside it. The skill also lists, pauses, updates, and deletes existing scans.
 
 ## Operating Modes
 
-* **Recommendation Mode (Default)**: read-only. Writes the view SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects` and `list_custom_data_scans` (and `create_custom_data_scan` with `dryRun=true` for a view that already exists). No DDL, no `bq` write, no scan change.
+* **Recommendation Mode (Default)**: read-only. Writes the view SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects` and `list_data_scans` (and `create_data_scan` with `dryRun=true` for a view that already exists). No DDL, no `bq` write, no scan change.
 * **Action Mode**: runs each customer-side step (dataset, view, grant, dataset authorization), the real scan creation, and every update or delete — **each only after the user's explicit yes for that step**. A yes for one step never covers the next.
 
-## How Masthead runs a custom scan
+## How Masthead runs a data scan
 
 * Masthead runs `SELECT * FROM <view> WHERE timestamp >= <window start>` as `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com`, in Masthead's project and at Masthead's cost.
 * Every run adds its own time filter, so the view must never filter to a fixed date.
 * Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency, learns its expected range, and flags values outside it as well as periods with no row at all.
 * The first run starts within about 10 minutes of creation, backfills the last 14 days, and sends no notifications. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
-* Custom data scans are available in the US region only.
+* Data scans are available in the US region only.
 
 ## View contract
 
@@ -44,10 +44,10 @@ The view returns these columns; extra columns are ignored. Examples: [references
 
 ### Step 0: Preconditions
 
-1. If the `create_custom_data_scan` tool is not available, stop: "Custom data scans are available in the US region only." Don't look for workarounds.
+1. If the `create_data_scan` tool is not available, stop: "Data scans are available in the US region only." Don't look for workarounds.
 2. `list_projects`: the project that will hold the view must be listed. If it isn't, stop and tell the user to connect that project to Masthead first.
 3. `bq ls --project_id=<project>` must succeed. If it doesn't, ask the user to run `gcloud auth login` and retry.
-4. `list_custom_data_scans`: show the existing scans, so a new name doesn't clash and an existing scan isn't recreated.
+4. `list_data_scans`: show the existing scans, so a new name doesn't clash and an existing scan isn't recreated.
 
 ### Step 1: Define the metric
 
@@ -90,7 +90,7 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
    ```sql
    CREATE SCHEMA IF NOT EXISTS `<project>.masthead_dq`
-   OPTIONS (location = '<location>', description = 'Views read by Masthead custom data scans');
+   OPTIONS (location = '<location>', description = 'Views read by Masthead data scans');
    ```
 
 2. View:
@@ -138,7 +138,7 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
 ### Step 4: Masthead-side dry run
 
-Call `create_custom_data_scan` with `view`, `name`, `frequency`, optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
+Call `create_data_scan` with `view`, `name`, `frequency`, optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
 
 | The error says | Fix |
 | --- | --- |
@@ -150,16 +150,16 @@ Call `create_custom_data_scan` with `view`, `name`, `frequency`, optional `proce
 
 ### Step 5: Create (Action Mode)
 
-After the user's yes, call `create_custom_data_scan` with the same arguments and `dryRun=false`. Report the scan `id`, that the first run starts within about 10 minutes and backfills 14 days without notifications, and that anomalies arrive as data quality incidents in Masthead.
+After the user's yes, call `create_data_scan` with the same arguments and `dryRun=false`. Report the scan `id`, that the first run starts within about 10 minutes and backfills 14 days without notifications, and that anomalies arrive as data quality incidents in Masthead.
 
 ### Step 6: Manage existing scans
 
-* List: `list_custom_data_scans`. Only scans with `source` `API` can be changed; `MANUAL` scans were set up by Masthead.
-* `update_custom_data_scan` and `delete_custom_data_scan` take the scan's `scanId` — the `id` from `list_custom_data_scans`.
-* Pause or resume: `update_custom_data_scan` with `active` set to `false` or `true`.
-* Processing delay: `update_custom_data_scan` with `processDelayHours`.
-* View or frequency: `update_custom_data_scan` with `view` or `frequency`. Warn first: this **deletes the scan's history and incidents** and analyzes it again from scratch. When the metric logic changes, create a new view and point the scan at it instead of editing the view in place, so old and new logic don't mix in the history.
-* Delete: `delete_custom_data_scan`, one scan per confirmation. It removes the scan's results and open incidents; the view stays, and the user can drop it themselves.
+* List: `list_data_scans`. Only scans with `source` `API` can be changed; `MANUAL` scans were set up by Masthead.
+* `update_data_scan` and `delete_data_scan` take the scan's `scanId` — the `id` from `list_data_scans`.
+* Pause or resume: `update_data_scan` with `active` set to `false` or `true`.
+* Processing delay: `update_data_scan` with `processDelayHours`.
+* View or frequency: `update_data_scan` with `view` or `frequency`. Warn first: this **deletes the scan's history and incidents** and analyzes it again from scratch. When the metric logic changes, create a new view and point the scan at it instead of editing the view in place, so old and new logic don't mix in the history.
+* Delete: `delete_data_scan`, one scan per confirmation. It removes the scan's results and open incidents; the view stays, and the user can drop it themselves.
 * Scan names can't be changed.
 
 ## Guardrails
@@ -167,11 +167,11 @@ After the user's yes, call `create_custom_data_scan` with the same arguments and
 * Masthead's service account gets access to the `masthead_dq` dataset only — never grant it anything on source datasets or projects.
 * Views expose aggregated metrics, never raw rows.
 * Never run DML, and never drop or replace a dataset or view the skill didn't create in this session.
-* Never call `create_custom_data_scan` with `dryRun=false` before a successful dry run of the same arguments.
+* Never call `create_data_scan` with `dryRun=false` before a successful dry run of the same arguments.
 * Every DDL statement, `bq update`, scan creation, update, and deletion needs its own explicit yes.
-* End with a numbered list of next steps: what was created and where, how to check it (`list_custom_data_scans`), and how to undo it.
+* End with a numbered list of next steps: what was created and where, how to check it (`list_data_scans`), and how to undo it.
 
 ## Documentation
 
-* [Custom data scans](https://docs.mastheadata.com/governance/data-quality-scans#custom-data-scans)
+* [Data scans](https://docs.mastheadata.com/governance/data-quality-scans#custom-data-scans)
 * [MCP tools reference](https://docs.mastheadata.com/developer/mcp/tools)
