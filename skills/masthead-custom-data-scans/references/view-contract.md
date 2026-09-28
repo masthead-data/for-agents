@@ -7,7 +7,7 @@
 | `timestamp` | `TIMESTAMP` | Start of the period the value describes |
 | `value` | `INT64`, `FLOAT64`, `NUMERIC`, `BIGNUMERIC` | Metric value |
 
-Masthead reads `SELECT * FROM <view> WHERE timestamp >= <window start>` on every run, resamples each `(table_reference, rule_name)` series to the scan frequency, and sums rows that share a period.
+Masthead reads `SELECT * FROM <view> WHERE timestamp >= <window start>` on every run and resamples each `(table_reference, rule_name)` series to the scan frequency.
 
 ## Examples
 
@@ -78,4 +78,4 @@ GROUP BY table_reference, rule_name, `timestamp`
 | `CURRENT_TIMESTAMP() AS timestamp` | Every row lands in the current period, and history collapses | Use the period the value describes |
 | Ratio as a fraction (0–1) | The learned range is too wide to flag anything | Multiply by 100 |
 | NULL in any column | The row is dropped, and the period may be flagged as missing | `IFNULL` or filter the NULLs out |
-| Several rows for the same table, metric, and period | Values are summed | Aggregate in the view |
+| Several rows for the same table, metric, and period | Only one of them is kept | Aggregate in the view |

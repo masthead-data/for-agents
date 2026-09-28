@@ -19,7 +19,7 @@ Add a custom data quality scan to Masthead end to end. The user describes a metr
 
 * Masthead runs `SELECT * FROM <view> WHERE timestamp >= <window start>` as `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com`, in Masthead's project and at Masthead's cost.
 * Every run adds its own time filter, so the view must never filter to a fixed date.
-* Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency (rows in the same period are summed), learns its expected range, and flags values outside it as well as periods with no row at all.
+* Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency, learns its expected range, and flags values outside it as well as periods with no row at all.
 * The first run starts within about 10 minutes of creation, backfills the last 14 days, and sends no notifications. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
 * Custom data scans are available in the US region only.
 
@@ -51,7 +51,7 @@ The view returns these columns; extra columns are ignored. Examples: [references
 
 ### Step 1: Define the metric
 
-Agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, the view name (snake_case, for example `orders_daily_volume`), and optionally a `backfillFrom` date (`YYYY-MM-DD`) when the first run should analyze the 14 days before that date instead of the 14 days before today. Write the view SQL to the contract above. Read the source by its partition column where possible, so each run stays cheap.
+Agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, and the view name (snake_case, for example `orders_daily_volume`). Write the view SQL to the contract above. Read the source by its partition column where possible, so each run stays cheap.
 
 ### Step 2: Local checks (read-only)
 
@@ -78,7 +78,7 @@ Run with the user's credentials and fix every failure before any DDL:
    WHERE (`timestamp` >= TIMESTAMP_SUB(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY), INTERVAL 14 DAY) OR `timestamp` IS NULL)
    ```
 
-   `row_count` must be above 0, `malformed_table_references` and `null_rows` must be 0, `series` at most 1,000, and `min_timestamp` should reach back about 14 days. Raise `future_rows` above 0 with the user. When `backfillFrom` is used, measure the window from that date instead of today.
+   `row_count` must be above 0, `malformed_table_references` and `null_rows` must be 0, `series` at most 1,000, and `min_timestamp` should reach back about 14 days. Raise `future_rows` above 0 with the user.
 
 3. Read the location of every source dataset with `bq show --format=prettyjson <project>:<dataset>` (the `location` field). They must all match.
 
@@ -138,7 +138,7 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
 ### Step 4: Masthead-side dry run
 
-Call `create_custom_data_scan` with `view`, `name`, `frequency`, optional `processDelayHours` and `backfillFrom`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
+Call `create_custom_data_scan` with `view`, `name`, `frequency`, optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
 
 | The error says | Fix |
 | --- | --- |
