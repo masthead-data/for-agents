@@ -21,6 +21,7 @@ Add a data quality scan to Masthead end to end. The user describes a metric; the
 * Every run adds its own time filter, so the view must never filter to a fixed date.
 * Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency, learns its expected range, and flags values outside it as well as periods with no row at all.
 * The first run starts within about 10 minutes of creation, backfills the last 14 days, and sends no notifications. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
+* Masthead only reads closed periods — the in-progress period (today, for a `DAILY` scan) is never fetched; a period is read on a run after it has closed. `processDelayHours` adds extra wait after that close, so late-arriving source data can land before the period is checked.
 * Data scans are available in the US region only.
 
 ## View contract
@@ -158,7 +159,7 @@ After the user's yes, call `create_data_scan` with the same arguments and `dryRu
 * `update_data_scan` and `delete_data_scan` take the scan's `scanId` — the `id` from `list_data_scans`.
 * Pause or resume: `update_data_scan` with `active` set to `false` or `true`.
 * Processing delay: `update_data_scan` with `processDelayHours`.
-* View or frequency: `update_data_scan` with `view` or `frequency`. Warn first: this **deletes the scan's history and incidents** and analyzes it again from scratch. When the metric logic changes, create a new view and point the scan at it instead of editing the view in place, so old and new logic don't mix in the history.
+* View or frequency: editing the view's SQL in place (`CREATE OR REPLACE VIEW` on the same view name) keeps the scan's stored history — new runs just read the new logic, so old and new values mix in one series. Pointing the scan at a different view with `update_data_scan` (`view` parameter) — or changing `frequency` — **deletes the scan's history and incidents** and analyzes it again from scratch; warn first, and prefer this over editing in place when the metric logic changes.
 * Delete: `delete_data_scan`, one scan per confirmation. It removes the scan's results and open incidents; the view stays, and the user can drop it themselves.
 * Scan names can't be changed.
 
