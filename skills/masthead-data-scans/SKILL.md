@@ -151,7 +151,7 @@ Call `create_data_scan` with `view`, `name`, `frequency`, optional `processDelay
 
 ### Step 5: Create (Action Mode)
 
-After the user's yes, call `create_data_scan` with the same arguments and `dryRun=false`. Report the scan `id`, that the first run starts right away and backfills 14 days without notifications, and that anomalies arrive as data quality incidents in Masthead.
+After the user's yes, call `create_data_scan` with the same arguments and `dryRun=false`. Report the scan `id`, that the first run starts right away and backfills 14 days without notifications, and that anomalies arrive as data quality incidents in Masthead. Right after creation, `nextProcessingDatetime` is a placeholder one hour ahead, not the first run: that run is already in progress, its results appear on the monitored table's page within a few minutes, and `nextProcessingDatetime` then moves to the next period.
 
 ### Step 6: Manage existing scans
 
@@ -169,7 +169,7 @@ After the user's yes, call `create_data_scan` with the same arguments and `dryRu
 * Views expose aggregated metrics, never raw rows.
 * Never run DML, and never drop or replace a dataset or view the skill didn't create in this session.
 * Never call `create_data_scan` with `dryRun=false` before a successful dry run of the same arguments.
-* Every DDL statement, `bq update`, scan creation, update, and deletion needs its own explicit yes.
+* Every DDL statement, `bq update`, scan creation, update, and deletion needs its own explicit yes. A reply that is not a clear yes — a typo, another question, a partial answer — is not one: ask again before acting.
 * End with a numbered list of next steps: what was created and where, how to check it (`list_data_scans`), and how to undo it.
 
 ## Documentation
