@@ -20,7 +20,7 @@ Add a data quality scan to Masthead end to end. The user describes a metric; the
 * Masthead runs `SELECT * FROM <view> WHERE timestamp >= <window start>` as `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com`, in Masthead's project and at Masthead's cost.
 * Every run adds its own time filter, so the view must never filter to a fixed date.
 * Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency, learns its expected range, and flags values outside it as well as periods with no row at all.
-* The first run starts within about 10 minutes of creation, backfills the last 14 days, and sends no notifications. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
+* The first run starts as soon as the scan is created, backfills the last 14 days, and sends no notifications. Its results appear within a few minutes on the monitored table's page in Masthead. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
 * Masthead only reads closed periods — the in-progress period (today, for a `DAILY` scan) is never fetched; a period is read on a run after it has closed. `processDelayHours` adds extra wait after that close, so late-arriving source data can land before the period is checked.
 * Data scans are available in the US region only.
 
@@ -151,7 +151,7 @@ Call `create_data_scan` with `view`, `name`, `frequency`, optional `processDelay
 
 ### Step 5: Create (Action Mode)
 
-After the user's yes, call `create_data_scan` with the same arguments and `dryRun=false`. Report the scan `id`, that the first run starts within about 10 minutes and backfills 14 days without notifications, and that anomalies arrive as data quality incidents in Masthead.
+After the user's yes, call `create_data_scan` with the same arguments and `dryRun=false`. Report the scan `id`, that the first run starts right away and backfills 14 days without notifications, and that anomalies arrive as data quality incidents in Masthead.
 
 ### Step 6: Manage existing scans
 
