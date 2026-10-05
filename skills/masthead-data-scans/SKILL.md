@@ -110,7 +110,7 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
    <history SQL>;
    ```
 
-3. Scheduled refresh. Pick the schedule from the frequency. Each run starts shortly after a period closes, so it finishes well inside the default `processDelayHours` (Step 5). Schedules are in UTC, like the periods:
+3. Scheduled refresh. Start from the schedule for the frequency below: each run starts shortly after a period closes, so it finishes well inside the default `processDelayHours` (Step 5). Schedules are in UTC, like the periods. **Then check when the source tables update** (`lastModifiedTime` in `bq show --format=prettyjson <project>:<dataset>.<table>`, or the latest jobs that write them). If a source is rebuilt later than the schedule, move the refresh after that rebuild — still inside the processing delay — or the refresh reads an incomplete period:
 
    | Frequency | Schedule | Default delay |
    | --- | --- | --- |
@@ -130,6 +130,8 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
    ```
 
    Terraform: a `google_bigquery_data_transfer_config` with `data_source_id = "scheduled_query"` and `params = { query = <refresh SQL> }`. The scheduled query runs as the user who creates it; recommend `--service_account_name=<service account>` (with BigQuery Data Editor on `masthead_dq`, Data Viewer on the sources, and Job User on the project), so the refresh doesn't stop when that user's access changes. Before creating it, check `bq ls --transfer_config` for one with the same display name.
+
+   The first scheduled query a user creates with `bq mk --transfer_config` needs a one-time browser consent for BigQuery Data Transfer, which an agent's shell can't complete (`bq` stops with "Got EOF"). Say so before this step, and offer two ways: the user runs that one command themselves (in Claude Code, type it after `!`) and opens the consent link it prints, or the query runs as a service account (`--service_account_name`), which needs no consent. Then confirm the result with `bq ls --transfer_config`.
 
 4. Read access for Masthead on that dataset only:
 
