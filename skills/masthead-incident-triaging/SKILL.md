@@ -24,7 +24,7 @@ This skill supports two execution modes:
 
 * **Recommendation Mode (Default)**: Investigates open incidents, analyzes upstream pipelines and downstream lineage impact, classifies severity, and drafts owner assignments and status updates. **Zero writes or modifications are made in this mode.**
 
-* **Action Mode**: Applies assignments (`assign_incident_owner`), status transitions (`update_incident_status`), severity updates (`update_incident_severity`), and notes (`append_incident_notes`) directly to Masthead. **Requires explicit user sign-off on the proposed changes before executing.**
+* **Action Mode**: Applies assignments, status transitions, severity updates, and notes directly to Masthead with `bulk_update_incidents`, one call per group of incidents that get the same change. **Requires explicit user sign-off on the proposed changes before executing.**
 
 ### Pacing Options
 
@@ -123,31 +123,21 @@ Retrieve registered team members in your Masthead tenant to assign tasks correct
 * **Tool**: `list_users`
 * **Example Prompt**: *"List all active users in my Masthead tenant."*
 
-#### 2. Assign Incident Owner
+#### 2. Apply Owner, Status, Severity, and Notes
 
-Route the incident to a specific team member.
+Apply the approved changes with one tool. Group incidents that get the same change (same owner, same status, same note) and send each group in one call; set only the fields that change.
 
-* **Tool**: `assign_incident_owner`
-* **Key Arguments**: `incidentGroupUuid`, `email`
-* **Example Prompt**: *"Assign incidents on table project.dataset.table_id to <user@yourcompany.com>."*
+Statuses: `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered final and should be used when the incident is resolved or doesn't require any action. Notes document progress, pipeline rerun confirmations, or root-cause explanations: `ADD` (the default) puts the new note above the existing notes with a `---` separator, `REPLACE` overwrites them.
 
-#### 3. Adjust Status & Severity
+* **Tool**: `bulk_update_incidents`
+* **Key Arguments**: `incidentGroupUuids` (list), and any of `status`, `severity` (`P1`–`P5`, or `NONE` to clear), `assigneeEmail` (or `NONE` to unassign), `notes` with optional `notesMode` (`ADD` | `REPLACE`)
+* **Result**: one `{groupHash, success, message}` per incident; `message` explains an incident that wasn't updated (for example "Incident not found"). An unknown `assigneeEmail` fails the whole call before anything changes.
+* **Example Prompts**:
+  * *"Assign the three freshness incidents on project.dataset.table_id to <user@yourcompany.com> and mark them as in progress."*
+  * *"Mark incidents <uuid1>, <uuid2> as NO_ACTION_NEEDED with the note 'Expected: weekend batch skipped'."*
+  * *"Escalate incident <uuid> to P1."*
 
-Set the status and severity. Statuses: `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered final and should be used when the incident is resolved or doesn't require any action.
-
-* **Tools**: `update_incident_status`, `update_incident_severity`
-* **Key Arguments**: `incidentGroupUuid`, `status` and/or `severity`
-* **Example Prompt**: *"Mark incident freshness for table project.dataset.table_id as in progress and escalate it to P1."*
-
-#### 4. Document Investigation (Notes)
-
-Append audit log notes or comments documenting progress, pipeline rerun confirmations, or root-cause explanations.
-
-* **Tool**: `append_incident_notes`
-* **Key Arguments**: `incidentGroupUuid`, `notes` (string)
-* **Example Prompt**: *"Add the note 'Investigating query schema change after release' to incident on table project.dataset.table_id."*
-
-#### 5. Adjust Monitoring Priority (Optional)
+#### 3. Adjust Monitoring Priority (Optional)
 
 For important data assets, elevate its monitoring tier to `PRIORITY` or `CRITICAL` to reduce the time to detect future incidents. On the other hand, if the data asset is not critical and you want to reduce noise, you can lower its monitoring tier to `REGULAR` or `MUTED`.
 

@@ -1,6 +1,6 @@
 {
   "name": "masthead-agent-tools",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "Masthead Agent Tools for BigQuery Data Observability and FinOps",
   "author": {
     "name": "Masthead Data",
