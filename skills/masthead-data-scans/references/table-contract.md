@@ -16,9 +16,7 @@ Candidates to propose when the user hasn't named a metric. Each one needs a time
 | Metric | `rule_name` example | Pattern | Good fit |
 | --- | --- | --- | --- |
 | Row volume per period | `orders_row_count` | `COUNT(*)` | Any append or partitioned table; catches dropped or duplicated loads |
-| NULL share of a key column | `null_email_percent` | `100 * COUNTIF(<col> IS NULL) / COUNT(*)`, several columns with `UNPIVOT` | Columns that feed joins, BI filters, or customer contact |
 | Distinct keys per period | `distinct_customer_ids` | `COUNT(DISTINCT <key>)` | Event or fact tables keyed by customer, account, or device |
-| Duplicate share | `duplicate_order_id_percent` | `100 * (COUNT(*) - COUNT(DISTINCT <key>)) / COUNT(*)` | Tables that must hold one row per key |
 | Business sum | `revenue_usd` | `SUM(<amount>)` | Revenue, cost, or quantity columns the business tracks |
 | Business sum per group | `cost_usd / <group>` | Zero-filled per group, as in the per-group example | A few dozen stable groups such as country, project, or channel |
 
