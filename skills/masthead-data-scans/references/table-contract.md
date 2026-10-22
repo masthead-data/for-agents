@@ -9,6 +9,19 @@
 
 Masthead reads `SELECT * FROM <scan table> WHERE timestamp >= <window start>` on every run and resamples each `(table_reference, rule_name)` series to the scan frequency. The customer's scheduled refresh writes the table; Masthead never reads the source tables.
 
+## Starter metrics
+
+Candidates to propose when the user hasn't named a metric. Each one needs a time column on the source table.
+
+| Metric | `rule_name` example | Pattern | Good fit |
+| --- | --- | --- | --- |
+| Row volume per period | `orders_row_count` | `COUNT(*)` | Any append or partitioned table; catches dropped or duplicated loads |
+| Distinct keys per period | `distinct_customer_ids` | `COUNT(DISTINCT <key>)` | Event or fact tables keyed by customer, account, or device |
+| Business sum | `revenue_usd` | `SUM(<amount>)` | Revenue, cost, or quantity columns the business tracks |
+| Business sum per group | `cost_usd / <group>` | Zero-filled per group, as in the per-group example | A few dozen stable groups such as country, project, or channel |
+
+Prefer `DAILY` unless the table loads more often and the user needs faster alerts.
+
 ## Metric SQL
 
 Write the metric once, with a window on the source's time column. `<from>` and `<to>` are period boundaries.

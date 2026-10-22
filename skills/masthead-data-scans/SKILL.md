@@ -1,6 +1,6 @@
 ---
 name: masthead-data-scans
-description: Set up a data quality scan end to end — define a metric with the user, materialize it as a BigQuery table in a `masthead_dq` dataset with a scheduled query that keeps it current, give Masthead read access to that dataset only, then validate and create the scan through the Masthead MCP server. Also lists, pauses, updates, and deletes existing scans. Every BigQuery change and every scan change runs only on explicit confirmation.
+description: Set up a data quality scan end to end — define a metric with the user (or propose ones for their critical tables), materialize it as a BigQuery table in a `masthead_dq` dataset with a scheduled query that keeps it current, give Masthead read access to that dataset only, then validate and create the scan through the Masthead MCP server. Also lists, pauses, updates, and deletes existing scans. Every BigQuery change and every scan change runs only on explicit confirmation.
 compatibility: Requires the Masthead MCP server at `https://mcp.mastheadata.com/mcp` (US region) and the `bq` CLI signed in to the customer's Google Cloud project, with permission to create datasets, tables, and scheduled queries (BigQuery Data Transfer API).
 ---
 
@@ -10,10 +10,18 @@ compatibility: Requires the Masthead MCP server at `https://mcp.mastheadata.com/
 
 Add a data quality scan to Masthead end to end. The user describes a metric; the skill turns it into a query that follows Masthead's contract, materializes the results in a table in a dedicated `masthead_dq` dataset in the user's project, schedules a query that adds each closed period to that table, gives Masthead read access to that dataset only, and creates the scan through the Masthead MCP server. Masthead then reads the table on a schedule, learns the expected range of every metric, and raises a data quality incident when a value falls outside it. Masthead never reads the source tables. The skill also lists, pauses, updates, and deletes existing scans.
 
+## Who runs what
+
+Masthead has no read access to the customer's data, so it can't run the metric query itself. Before proposing any change, tell the user in your own words:
+
+* **In your project, at your cost**: the metric query runs as a scheduled query (or in your dbt, Dataform, or Airflow) with your credentials or a service account you choose, and writes aggregated values — one number per table, metric, and period — to a table in a `masthead_dq` dataset.
+* **You share one dataset**: Masthead's service account gets read access to `masthead_dq` only. Source datasets, projects, and raw rows stay private.
+* **In Masthead, at Masthead's cost**: Masthead reads that results table on the scan's schedule, learns each metric's expected range, and raises data quality incidents.
+
 ## Operating Modes
 
-* **Recommendation Mode (Default)**: read-only. Writes the metric SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects` and `list_data_scans` (and `create_data_scan` with `dryRun=true` for a scan table that already exists). No DDL, no `bq` write, no scan change.
-* **Action Mode**: runs each customer-side step (dataset, table, scheduled refresh, grant), the real scan creation, and every update or delete — **each only after the user's explicit yes for that step**. A yes for one step never covers the next.
+* **Recommendation Mode (Default)**: read-only. Writes the metric SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects`, `list_data_scans`, and `list_asset_scores` (and `create_data_scan` with `dryRun=true` for a scan table that already exists). No DDL, no `bq` write, no scan change.
+* **Action Mode**: runs each customer-side step (dataset, table, scheduled refresh, grant), the real scan creation, and every update or delete — **each only after the user's explicit yes for that step**. A yes for one step never covers the next. A request to *set up* or *create* a scan, like the [example prompts](#example-prompts), asks for Action Mode: run the read-only steps, show the setup plan, then ask for each change in turn.
 
 ## How Masthead runs a data scan
 
@@ -55,7 +63,13 @@ The scan table has these columns; extra columns are ignored. Examples and the re
 
 ### Step 1: Define the metric
 
-Agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, and the scan table name (snake_case, for example `orders_daily_volume`). Write the **metric SQL** to the contract above, with one placeholder window on the source's time column: `<time column> >= <from> AND <time column> < <to>`. Read the source by its partition column where possible, so each refresh stays cheap. From it, derive:
+If the user didn't name a table or a metric, propose candidates instead of asking an open question:
+
+1. `list_asset_scores` with `assetTypes = ["TABLE"]`, `alertTiers = ["CRITICAL", "PRIORITY"]`, `limit = 20` (plus `project` when scoped). If it returns no rows, use `alertTiers = ["REGULAR"]` with `minPercentile = 90` instead. Shortlist up to 5 tables, highest score first.
+2. Read each shortlisted table with `bq show --format=prettyjson <project>:<dataset>.<table>`. Find its time column — the partition column first (`timePartitioning.field`, or `_PARTITIONTIME` when `timePartitioning` has no field), then a load or event timestamp in `schema.fields`. Skip tables without one: they can't produce one row per period.
+3. Propose 1–3 metrics per table from [Starter metrics](references/table-contract.md#starter-metrics), each with its frequency and why it suits that table. Let the user pick before writing any SQL.
+
+Then agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, and the scan table name (snake_case, for example `orders_daily_volume`). Write the **metric SQL** to the contract above, with one placeholder window on the source's time column: `<time column> >= <from> AND <time column> < <to>`. Read the source by its partition column where possible, so each refresh stays cheap. From it, derive:
 
 * **History SQL**: the window is the last 30 closed periods, for the initial table.
 * **Refresh SQL**: a `MERGE` of the last 3 closed periods into the table, from the template in [references/table-contract.md](references/table-contract.md). Recomputing 3 periods every run fills in late source data and recovers from a missed run.
@@ -169,8 +183,15 @@ After the user's yes, call `create_data_scan` with the same arguments and `dryRu
 * Delete: `delete_data_scan`, one scan per confirmation. It removes the scan's results and open incidents; the scan table and the scheduled query stay. Offer to remove them too (`bq rm --transfer_config <transfer config name>`, then `DROP TABLE`), each with its own yes.
 * Scan names can't be changed.
 
+## Example prompts
+
+* From the **Set up a data scan** button on the Masthead Data scans tab: "Set up a Masthead data scan on my BigQuery data using the masthead-data-scans skill. Masthead has no read access to my data, so the metric must run in my Google Cloud project: suggest metrics for my CRITICAL and PRIORITY tables (or the table I name), materialize them in a table in a masthead_dq dataset with a scheduled query that keeps it current, grant Masthead read access to that dataset only, then dry-run and create the scan with the Masthead MCP server." Start at Step 0, and propose candidates in Step 1.
+* "Monitor the daily row count and the share of customers without an email in `my-project.crm.customers` with a Masthead data scan." Table and metrics are given; skip the candidate proposal.
+* "Alert me when daily compute cost per project in `my-project.finance.compute_cost_overview` looks unusual." One series per project, zero-filled, as in the reference's per-group example.
+
 ## Guardrails
 
+* Explain [who runs what](#who-runs-what) before the setup plan: the user must know the queries run in their project before agreeing to any change.
 * Masthead's service account gets access to the `masthead_dq` dataset only — never grant it anything on source datasets or projects.
 * Scan tables hold aggregated metrics, never raw rows.
 * Never write to a source table, and never drop or replace a dataset, table, or scheduled query the skill didn't create in this session. Only the scheduled refresh writes to the scan table.
