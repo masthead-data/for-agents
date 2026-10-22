@@ -20,7 +20,7 @@ Masthead has no read access to the customer's data, so it can't run the metric q
 
 ## Operating Modes
 
-* **Recommendation Mode (Default)**: read-only. Writes the metric SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects`, `list_data_scans`, `list_asset_scores`, and `get_table_metadata` (and `create_data_scan` with `dryRun=true` for a scan table that already exists). No DDL, no `bq` write, no scan change.
+* **Recommendation Mode (Default)**: read-only. Writes the metric SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects`, `list_data_scans`, and `list_asset_scores` (and `create_data_scan` with `dryRun=true` for a scan table that already exists). No DDL, no `bq` write, no scan change.
 * **Action Mode**: runs each customer-side step (dataset, table, scheduled refresh, grant), the real scan creation, and every update or delete — **each only after the user's explicit yes for that step**. A yes for one step never covers the next. A request to *set up* or *create* a scan, like the [example prompts](#example-prompts), asks for Action Mode: run the read-only steps, show the setup plan, then ask for each change in turn.
 
 ## How Masthead runs a data scan
@@ -66,7 +66,7 @@ The scan table has these columns; extra columns are ignored. Examples and the re
 If the user didn't name a table or a metric, propose candidates instead of asking an open question:
 
 1. `list_asset_scores` with `assetTypes = ["TABLE"]`, `alertTiers = ["CRITICAL", "PRIORITY"]`, `limit = 20` (plus `project` when scoped). If it returns no rows, use `alertTiers = ["REGULAR"]` with `minPercentile = 90` instead. Shortlist up to 5 tables, highest score first.
-2. Read each shortlisted table's schema with `get_table_metadata` or `bq show --schema --format=prettyjson <project>:<dataset>.<table>`. Find its time column — the partition column first, then a load or event timestamp. Skip tables without one: they can't produce one row per period.
+2. Read each shortlisted table with `bq show --format=prettyjson <project>:<dataset>.<table>`. Find its time column — the partition column first (`timePartitioning.field`, or `_PARTITIONTIME` when `timePartitioning` has no field), then a load or event timestamp in `schema.fields`. Skip tables without one: they can't produce one row per period.
 3. Propose 1–3 metrics per table from [Starter metrics](references/table-contract.md#starter-metrics), each with its frequency and why it suits that table. Let the user pick before writing any SQL.
 
 Then agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, and the scan table name (snake_case, for example `orders_daily_volume`). Write the **metric SQL** to the contract above, with one placeholder window on the source's time column: `<time column> >= <from> AND <time column> < <to>`. Read the source by its partition column where possible, so each refresh stays cheap. From it, derive:
