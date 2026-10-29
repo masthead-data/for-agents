@@ -70,7 +70,7 @@ ORDER BY savings_usd_30d DESC"
 | `Decrease commitment at renewal` | A smaller commitment, or none, costs less. Savings start after `active_commitment_ends_at`. | `CHANGE_RENEWAL`, `SET_BASELINES` |
 | `Set baseline` | The commitment size is right, but the reservation baselines don't match it. | `SET_BASELINES` |
 
-`savings_usd_30d` compares the group's cost over the row's `period` (`days` days, up to 30) with its cost at `recommended_committed_slots`. Rows are rebuilt about every 12 hours from the latest daily recommendation, and don't show a purchase or change made after `last_updated_time`.
+`savings_usd_30d` compares the group's cost over the row's `period` (`days` days, up to 30) with its cost at `recommended_committed_slots`. Rows come from the latest daily recommendation, and the exported table refreshes once a day, so they don't show a purchase or change made after `last_updated_time`.
 
 ### Step 2: Review and Decide
 
@@ -87,7 +87,7 @@ Decide on the action for each row:
 
 **Review criteria:**
 
-- **Live Commitments:** Before any `CREATE_CAPACITY`, check that the `slot_count` total of `ACTIVE` commitments equals `active_committed_slots`. If it doesn't, a purchase or change was made after `last_updated_time`: mark the row `skip` and re-read it after the next refresh.
+- **Live Commitments:** Before any `CREATE_CAPACITY` or `CHANGE_RENEWAL`, run this query. The `slot_count` total of commitments in state `ACTIVE` or `PENDING` must equal `active_committed_slots`, and for `CHANGE_RENEWAL` every commitment in `commitments` must still have its listed `slot_count` and `renewal_plan`. If not, a purchase or change was made after `last_updated_time`: mark the row `skip` and re-read it after the next refresh.
 
   ```bash
   bq query --project_id=ADMIN_PROJECT --location=LOCATION --use_legacy_sql=false --format=pretty \
@@ -113,7 +113,7 @@ Decide on the action for each row:
 > [!IMPORTANT]
 > The agent does **not** buy, alter, or split anything. All commands must be reviewed and executed by a developer or operator. `CREATE CAPACITY` is a purchase: a 1-year commitment can't be cancelled or reduced before it ends.
 
-Take every value from `operations` verbatim and keep the array order. In `operations` a resource is `ADMIN_PROJECT:LOCATION.ID`; in SQL DDL it is `` `ADMIN_PROJECT.region-LOCATION.ID` ``. Validate each DDL statement without running it: `bq query --dry_run --project_id=ADMIN_PROJECT --location=LOCATION --use_legacy_sql=false "<DDL>"` prints `Query successfully validated`.
+Take every value from `operations` verbatim and keep the array order. In `operations` a resource is `ADMIN_PROJECT:LOCATION.ID`; in SQL DDL it is `` `ADMIN_PROJECT.region-LOCATION.ID` ``. Validate each DDL statement without running it: `bq query --dry_run --project_id=ADMIN_PROJECT --location=LOCATION --use_legacy_sql=false "<DDL>"` prints `Query successfully validated`. The agent may run this dry run; it never runs a statement without `--dry_run`.
 
 If the commitments or reservations are managed in Terraform, make the change in [`google_bigquery_capacity_commitment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_capacity_commitment) or [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) instead: the next `terraform apply` would revert a DDL change.
 
@@ -147,9 +147,10 @@ If the commitments or reservations are managed in Terraform, make the change in 
 
 3. Timing and rules:
    - **After `CREATE_CAPACITY`:** run once the new commitment is `ACTIVE`. Baseline that committed slots don't cover must be a multiple of 50 and is billed at pay-as-you-go rates.
-   - **After `CHANGE_RENEWAL`:** lower the baselines to `total_baseline_slots` on or before the earliest `ends_at`. When `total_baseline_slots` is 0, set every baseline to 0.
+   - **After `CHANGE_RENEWAL`:** lower the baselines to `total_baseline_slots` on or before the earliest `ends_at`.
+   - **`total_baseline_slots` is 0:** set every baseline to 0.
    - **`ignore_idle_slots = true` with no baseline:** offer `ALTER RESERVATION … SET OPTIONS (ignore_idle_slots = false)` so the reservation can use idle slots.
-   - **Autoscaling:** leave it as it is. It covers demand above the commitment.
+   - **Autoscaling:** keep it on: it covers demand above the commitment. A reservation's maximum size is its baseline plus `autoscale_max_slots`, so lowering a baseline lowers the maximum by the same amount. Where a baseline goes down, show the reservation's `autoscale_max_slots` from the reservations query in Step 4 and ask the user whether to raise it with `ALTER RESERVATION … SET OPTIONS (autoscale_max_slots = N)`. A reservation with no baseline and `autoscale_max_slots = 0` gets only idle slots, and none once the commitment ends.
 
 #### CHANGE_RENEWAL
 
@@ -162,7 +163,7 @@ An active commitment can't be cancelled or reduced, so this changes what renews 
   SET OPTIONS (renewal_plan = 'NONE');
   ```
 
-- **`renew_slots > 0`:** choose commitments whose `slot_count` adds up to `renew_slots` and keep them renewing (set `renewal_plan = 'ANNUAL'` where it is `NONE`); set the rest to `NONE`. If no combination adds up, split a commitment first. There is no SQL DDL for a split; the new part keeps the plan and end date, and splits go in steps of 50 slots:
+- **`renew_slots > 0`:** choose commitments whose `slot_count` adds up to `renew_slots` and keep them renewing (set `renewal_plan = 'ANNUAL'` where it is `NONE`); set the rest to `NONE`. If no combination adds up, split a commitment first. There is no SQL DDL for a split; the new part keeps the plan and end date, `SLOTS` is the new part's size, and splits go in steps of 50 slots:
 
   ```bash
   bq update --project_id=ADMIN_PROJECT --location=LOCATION --split --slots=SLOTS --capacity_commitment=true CAPACITY_COMMITMENT_ID
@@ -198,11 +199,11 @@ The BigQuery console has the same actions: **Workload management** → **Slot co
 | --- | --- | --- |
 | Buy or increase a commitment | Live commitments match the row; demand is steady and no decline is planned within the term | Live commitments differ (skip until the next refresh); a migration or decommission is planned; thin `savings_share`; `days` below 30 |
 | Decrease at renewal | Before the earliest `ends_at`, when the lower demand is expected to last | Planned growth would need the slots back |
-| Set baselines | The commitment is `ACTIVE` and the baselines don't add up to it | The commitment isn't `ACTIVE` yet |
+| Set baselines | A commitment is `ACTIVE`, or the group has none, and the baselines don't add up to `total_baseline_slots` | A commitment bought for this row isn't `ACTIVE` yet |
 
 ## Common Pitfalls
 
-- **Buying From a Stale Row**: Buying again after a purchase made since `last_updated_time`. Always run the live commitments check first.
+- **Buying From a Stale Row**: Buying again after a purchase made since `last_updated_time`, including one that is still `PENDING`. Always run the live commitments check first.
 - **Baselines Before the Commitment Is Active**: Uncovered baseline must be a multiple of 50 and is billed at pay-as-you-go rates.
 - **Letting a Commitment End Without Lowering Baselines**: Baseline slots stay billed, at pay-as-you-go rates once the commitment is gone.
 - **Invalid Commitment IDs**: `CREATE CAPACITY` rejects uppercase letters and IDs already used in the project and location.

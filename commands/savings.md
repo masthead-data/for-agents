@@ -1,5 +1,5 @@
 ---
-description: Audit BigQuery storage and compute waste across tables, datasets, and pipelines
+description: Audit BigQuery storage and compute waste across tables, datasets, pipelines, data models, and slot commitments
 ---
 
 # Masthead FinOps Optimization

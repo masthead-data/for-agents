@@ -20,7 +20,7 @@ This repository provides single-source-of-truth plugins and skills for:
 
 All FinOps skills adhere to strict non-action principles:
 
-- **Zero Automated Mutations**: The agent **never** executes destructive commands (`bq rm`), alters billing configurations (`bq update`), or disables running pipelines directly.
+- **Zero Automated Mutations**: The agent **never** executes destructive commands (`bq rm`), buys capacity commitments (`CREATE CAPACITY`), alters billing configurations (`bq update`), or disables running pipelines directly.
 - **Decision Support & Artifacts**: The agent investigates recency, analyzes lineage and downstream impact, provides clear cost/risk trade-offs, and generates whatever review artifacts the human operator requests (Markdown review tables, CSV candidate exports, or standalone shell scripts with dry-run commands for the user to inspect and run).
 
 ---
