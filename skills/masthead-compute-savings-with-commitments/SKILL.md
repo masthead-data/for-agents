@@ -68,7 +68,7 @@ ORDER BY savings_usd_30d DESC"
 | `Buy commitment` | The group has no active commitment, and a 1-year commitment costs less than its current reservations. | `CREATE_CAPACITY`, `SET_BASELINES` |
 | `Increase commitment` | More committed slots cost less than the current commitment. | `CREATE_CAPACITY` (`slot_count` is the slots to add), `SET_BASELINES` |
 | `Decrease commitment at renewal` | A smaller commitment, or none, costs less. Savings start after `active_commitment_ends_at`. | `CHANGE_RENEWAL`, `SET_BASELINES` |
-| `Set baseline` | The commitment size is right, but the reservation baselines don't match it. | `SET_BASELINES` |
+| `Set baseline` | The commitment size is right, or a smaller size is already scheduled to renew, but the reservation baselines don't match it. | `SET_BASELINES` |
 
 `savings_usd_30d` compares the group's cost over the row's `period` (`days` days, up to 30) with its cost at `recommended_committed_slots`. Rows come from the latest daily recommendation, and the exported table refreshes once a day, so they don't show a purchase or change made after `last_updated_time`.
 
@@ -103,8 +103,10 @@ Decide on the action for each row:
   ORDER BY capacity_commitment_id"
   ```
 
+- **Already Done:** If the commitments in `commitments` whose `renewal_plan` isn't `NONE` already add up to `renew_slots`, the renewal change is done: skip `CHANGE_RENEWAL`. Before any `SET_BASELINES`, run the reservations query from Step 4: if the listed reservations' `slot_capacity` already adds up to `total_baseline_slots`, the baselines are done: say so and skip `SET_BASELINES`.
+
 - **Planned Workload Changes:** A commitment is billed for every hour of its term, whatever the usage. Ask whether a migration, a decommission, or new workloads are planned within the term.
-- **Thin Savings:** A small `savings_share` next to a 1-year purchase leaves little margin if demand falls. Mark the row `investigate` and let the user decide.
+- **Savings Margin:** For every purchase, show `savings_share` next to the 1-year commitment cost: a small share leaves little margin if demand falls. Let the user decide; don't mark a row `investigate` only because of its share.
 - **Short History:** `days` below 30 means a new group, so the recommendation rests on less history.
 - **Idle Slots:** In `SET_BASELINES`, a reservation with `ignore_idle_slots = true` doesn't use committed slots it has no baseline for.
 
@@ -197,7 +199,7 @@ The BigQuery console has the same actions: **Workload management** → **Slot co
 
 | Recommendation | When to Apply | When to Skip or Investigate |
 | --- | --- | --- |
-| Buy or increase a commitment | Live commitments match the row; demand is steady and no decline is planned within the term | Live commitments differ (skip until the next refresh); a migration or decommission is planned; thin `savings_share`; `days` below 30 |
+| Buy or increase a commitment | Live commitments match the row; demand is steady and no decline is planned within the term | Live commitments differ (skip until the next refresh); a migration or decommission is planned; `days` below 30 |
 | Decrease at renewal | Before the earliest `ends_at`, when the lower demand is expected to last | Planned growth would need the slots back |
 | Set baselines | A commitment is `ACTIVE`, or the group has none, and the baselines don't add up to `total_baseline_slots` | A commitment bought for this row isn't `ACTIVE` yet |
 
