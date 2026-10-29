@@ -139,8 +139,8 @@ If the commitments or reservations are managed in Terraform, make the change in 
 
 `total_baseline_slots` is the total to split across `reservations`; each reservation's `baseline_slots` is its current baseline.
 
-1. Show the reservations with their current baselines and `ignore_idle_slots`, and ask the user how to split `total_baseline_slots`. The baselines should add up to it: baseline above the committed slots is billed at pay-as-you-go rates. Baseline suits reservations that run steadily. Committed slots that a reservation isn't using are idle slots, which reservations with `ignore_idle_slots = false` use before they autoscale.
-2. Write one statement per reservation whose baseline changes:
+1. Show the reservations with their current baselines and `ignore_idle_slots`, and ask the user how to split `total_baseline_slots`. Don't propose a split: the user knows which workloads run steadily. The baselines should add up to it: baseline above the committed slots is billed at pay-as-you-go rates. Baseline suits reservations that run steadily. Committed slots that a reservation isn't using are idle slots, which reservations with `ignore_idle_slots = false` use before they autoscale.
+2. Write one statement per reservation whose baseline changes, with the user's numbers. Until the user gives them, keep `BASELINE_SLOTS` as a placeholder; fill it in yourself only when the split is fixed (one reservation, or a total of 0):
 
    ```sql
    ALTER RESERVATION `ADMIN_PROJECT.region-LOCATION.RESERVATION_ID`
@@ -149,7 +149,7 @@ If the commitments or reservations are managed in Terraform, make the change in 
 
 3. Timing and rules:
    - **After `CREATE_CAPACITY`:** run once the new commitment is `ACTIVE`. Baseline that committed slots don't cover must be a multiple of 50 and is billed at pay-as-you-go rates.
-   - **After `CHANGE_RENEWAL`:** lower the baselines to `total_baseline_slots` on or before the earliest `ends_at`.
+   - **After `CHANGE_RENEWAL`, or on a `Set baseline` row whose `active_committed_slots` is above `total_baseline_slots` (a smaller size is already scheduled to renew):** lower the baselines to `total_baseline_slots` on or before the earliest `ends_at` (`active_commitment_ends_at`). The savings start when the larger commitment ends, not when the baselines go down.
    - **`total_baseline_slots` is 0:** set every baseline to 0.
    - **`ignore_idle_slots = true` with no baseline:** offer `ALTER RESERVATION … SET OPTIONS (ignore_idle_slots = false)` so the reservation can use idle slots.
    - **Autoscaling:** keep it on: it covers demand above the commitment. A reservation's maximum size is its baseline plus `autoscale_max_slots`, so lowering a baseline lowers the maximum by the same amount. Where a baseline goes down, show the reservation's `autoscale_max_slots` from the reservations query in Step 4 and ask the user whether to raise it with `ALTER RESERVATION … SET OPTIONS (autoscale_max_slots = N)`. A reservation with no baseline and `autoscale_max_slots = 0` gets only idle slots, and none once the commitment ends.
