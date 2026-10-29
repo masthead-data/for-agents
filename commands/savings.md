@@ -11,4 +11,4 @@ Run the Masthead FinOps advisory workflow. Scope from the user, if any: `$ARGUME
 2. Evaluate dataset storage billing models and expiration (`masthead-storage-savings-with-datasets`).
 3. Identify orphan or dead-end data pipelines (`masthead-compute-savings-with-pipelines`).
 4. Rebalance Dataform, dbt, or Airflow reservation compute (`masthead-compute-savings-with-workload-assignments`).
-5. Size slot commitments and reservation baselines (`masthead-compute-savings-with-commitments`).
+5. Size slot commitments and reservation baselines (`masthead-compute-savings-with-capacity-commitments`).

@@ -1,5 +1,5 @@
 ---
-name: masthead-compute-savings-with-commitments
+name: masthead-compute-savings-with-capacity-commitments
 description: Optimize BigQuery Enterprise and Enterprise Plus compute costs by buying or growing slot capacity commitments, shrinking them at renewal, and setting reservation baselines, based on Masthead commitment recommendations.
 compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only permissions to run BigQuery jobs, access Masthead insight datasets, and view reservations and capacity commitments in the reservation admin project.
 ---

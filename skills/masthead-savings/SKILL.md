@@ -13,6 +13,6 @@ Run the Masthead FinOps advisory workflow, in this order. If the user named a pr
 2. Evaluate dataset storage billing models and expiration (`masthead-storage-savings-with-datasets`).
 3. Identify orphan or dead-end data pipelines (`masthead-compute-savings-with-pipelines`).
 4. Rebalance Dataform, dbt, or Airflow reservation compute (`masthead-compute-savings-with-workload-assignments`).
-5. Size slot commitments and reservation baselines (`masthead-compute-savings-with-commitments`).
+5. Size slot commitments and reservation baselines (`masthead-compute-savings-with-capacity-commitments`).
 
 Every step is advisory: produce review tables and user-executed scripts, never run `bq rm`, `bq update`, `CREATE CAPACITY`, or pipeline changes yourself.
