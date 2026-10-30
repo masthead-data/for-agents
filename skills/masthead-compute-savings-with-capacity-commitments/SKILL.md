@@ -12,7 +12,7 @@ Translate Masthead capacity commitment recommendations (`Capacity commitment` ro
 
 ## When to Use
 
-- Deciding whether a 1-year slot commitment lowers Enterprise or Enterprise Plus reservation costs, and how many slots it should have.
+- Deciding whether a slot commitment lowers Enterprise or Enterprise Plus reservation costs, and how many slots it should have.
 - Planning a smaller commitment, or none, before an active commitment renews.
 - Setting reservation baselines after the committed slots change.
 
@@ -65,8 +65,7 @@ ORDER BY savings_usd_30d DESC"
 
 | Subtype | Meaning | `operations`, in order |
 | --- | --- | --- |
-| `Buy commitment` | The group has no active commitment, and a 1-year commitment costs less than its current reservations. | `CREATE_CAPACITY`, `SET_BASELINES` |
-| `Increase commitment` | More committed slots cost less than the current commitment. | `CREATE_CAPACITY` (`slot_count` is the slots to add), `SET_BASELINES` |
+| `Buy commitment` | A commitment, or more committed slots next to the active one, costs less than the current reservations. `active_committed_slots` is 0 when the group has none. | `CREATE_CAPACITY` (`slot_count` is the slots to add), `SET_BASELINES` |
 | `Decrease commitment at renewal` | A smaller commitment, or none, costs less. Savings start after `active_commitment_ends_at`. | `CHANGE_RENEWAL`, `SET_BASELINES` |
 | `Set baseline` | The commitment size is right, or a smaller size is already scheduled to renew, but the reservation baselines don't match it. | `SET_BASELINES` |
 
@@ -77,7 +76,7 @@ ORDER BY savings_usd_30d DESC"
 Review the retrieved rows. The user or agent can choose the most optimal format to store, present, or review them (e.g., as a Markdown table, a CSV file, or an interactive terminal selection). Next to the row values, show:
 
 - `savings_share` from the query (`savings_30d / cost_30d`);
-- for `CREATE_CAPACITY`, the 1-year commitment cost: `slot_count × commitment_price × 8,760` hours (for example 450 slots × $0.0528 × 8,760 ≈ $208,000).
+- for `CREATE_CAPACITY`, the commitment's cost over its term: `slot_count × commitment_price × 8,760` hours per year, for 1 year when `plan` is `ANNUAL` and 3 years when it is `THREE_YEAR` (for example 450 slots × $0.0528 × 8,760 ≈ $208,000 for 1 year).
 
 Decide on the action for each row:
 
@@ -103,17 +102,17 @@ Decide on the action for each row:
   ORDER BY capacity_commitment_id"
   ```
 
-- **Already Done:** If the commitments in `commitments` whose `renewal_plan` isn't `NONE` already add up to `renew_slots`, the renewal change is done: skip `CHANGE_RENEWAL`. Before any `SET_BASELINES`, run the reservations query from Step 4: if the listed reservations' `slot_capacity` already adds up to `total_baseline_slots`, the baselines are done: say so and skip `SET_BASELINES`.
+- **Already Done:** If the commitments in `commitments` whose `renewal_plan` isn't `NONE` already add up to `renew_slots`, the renewal change is done: skip `CHANGE_RENEWAL`. Before any `SET_BASELINES`, run the reservations query from Step 4: if the listed reservations' `slot_capacity` already adds up to `total_slot_capacity`, the baselines are done: say so and skip `SET_BASELINES`.
 
 - **Planned Workload Changes:** A commitment is billed for every hour of its term, whatever the usage. Ask whether a migration, a decommission, or new workloads are planned within the term.
-- **Savings Margin:** For every purchase, show `savings_share` next to the 1-year commitment cost: a small share leaves little margin if demand falls. Let the user decide; don't mark a row `investigate` only because of its share.
+- **Savings Margin:** For every purchase, show `savings_share` next to the commitment's cost over its term: a small share leaves little margin if demand falls. Let the user decide; don't mark a row `investigate` only because of its share.
 - **Short History:** `days` below 30 means a new group, so the recommendation rests on less history.
 - **Idle Slots:** In `SET_BASELINES`, a reservation with `ignore_idle_slots = true` doesn't use committed slots it has no baseline for.
 
 ### Step 3: Generate Commitment Artifacts (User-Executed)
 
 > [!IMPORTANT]
-> The agent does **not** buy, alter, or split anything. All commands must be reviewed and executed by a developer or operator. `CREATE CAPACITY` is a purchase: a 1-year commitment can't be cancelled or reduced before it ends.
+> The agent does **not** buy, alter, or split anything. All commands must be reviewed and executed by a developer or operator. `CREATE CAPACITY` is a purchase: a commitment can't be cancelled or reduced before it ends.
 
 Take every value from `operations` verbatim and keep the array order. In `operations` a resource is `ADMIN_PROJECT:LOCATION.ID`; in SQL DDL it is `` `ADMIN_PROJECT.region-LOCATION.ID` ``. Validate each DDL statement without running it: `bq query --dry_run --project_id=ADMIN_PROJECT --location=LOCATION --use_legacy_sql=false "<DDL>"` prints `Query successfully validated`. The agent may run this dry run; it never runs a statement without `--dry_run`.
 
@@ -137,22 +136,27 @@ If the commitments or reservations are managed in Terraform, make the change in 
 
 #### SET_BASELINES
 
-`total_baseline_slots` is the total to split across `reservations`; each reservation's `baseline_slots` is its current baseline.
+`total_slot_capacity` is the total to split across `reservations`; each reservation's `slot_capacity` and `autoscale_max_slots` are its baseline and autoscale maximum at the end of the previous day.
 
-1. Show the reservations with their current baselines and `ignore_idle_slots`, and ask the user how to split `total_baseline_slots`. Don't propose a split: the user knows which workloads run steadily. The baselines should add up to it: baseline above the committed slots is billed at pay-as-you-go rates. Baseline suits reservations that run steadily. Committed slots that a reservation isn't using are idle slots, which reservations with `ignore_idle_slots = false` use before they autoscale.
+1. Show the reservations with their current baselines and `ignore_idle_slots`, and ask the user how to split `total_slot_capacity`. Don't propose a split: the user knows which workloads run steadily. The baselines should add up to it: baseline above the committed slots is billed at pay-as-you-go rates. Baseline suits reservations that run steadily. Committed slots that a reservation isn't using are idle slots, which reservations with `ignore_idle_slots = false` use before they autoscale.
 2. Write one statement per reservation whose baseline changes, with the user's numbers. Until the user gives them, keep `BASELINE_SLOTS` as a placeholder; fill it in yourself only when the split is fixed (one reservation, or a total of 0):
 
    ```sql
    ALTER RESERVATION `ADMIN_PROJECT.region-LOCATION.RESERVATION_ID`
-   SET OPTIONS (slot_capacity = BASELINE_SLOTS);
+   SET OPTIONS (
+     slot_capacity = BASELINE_SLOTS,
+     autoscale_max_slots = AUTOSCALE_SLOTS
+   );
    ```
+
+   `AUTOSCALE_SLOTS` keeps the reservation's maximum size (baseline plus `autoscale_max_slots`) as it is: `slot_capacity + autoscale_max_slots − BASELINE_SLOTS`, rounded up to a multiple of 50 (BigQuery rejects other values), or 0 if that is negative. Take `slot_capacity` and `autoscale_max_slots` from the row, or from the reservations query in Step 4 when it shows different current values. Fill it in together with `BASELINE_SLOTS`; the user can change it.
 
 3. Timing and rules:
    - **After `CREATE_CAPACITY`:** run once the new commitment is `ACTIVE`. Baseline that committed slots don't cover must be a multiple of 50 and is billed at pay-as-you-go rates.
-   - **After `CHANGE_RENEWAL`, or on a `Set baseline` row whose `active_committed_slots` is above `total_baseline_slots` (a smaller size is already scheduled to renew):** lower the baselines to `total_baseline_slots` on or before the earliest `ends_at` (`active_commitment_ends_at`). The savings start when the larger commitment ends, not when the baselines go down.
-   - **`total_baseline_slots` is 0:** set every baseline to 0.
+   - **After `CHANGE_RENEWAL`, or on a `Set baseline` row whose `active_committed_slots` is above `total_slot_capacity` (a smaller size is already scheduled to renew):** lower the baselines to `total_slot_capacity` on or before the earliest `ends_at` (`active_commitment_ends_at`). The savings start when the larger commitment ends, not when the baselines go down.
+   - **`total_slot_capacity` is 0:** set every baseline to 0.
    - **`ignore_idle_slots = true` with no baseline:** offer `ALTER RESERVATION … SET OPTIONS (ignore_idle_slots = false)` so the reservation can use idle slots.
-   - **Autoscaling:** keep it on: it covers demand above the commitment. A reservation's maximum size is its baseline plus `autoscale_max_slots`, so lowering a baseline lowers the maximum by the same amount. Where a baseline goes down, show the reservation's `autoscale_max_slots` from the reservations query in Step 4 and ask the user whether to raise it with `ALTER RESERVATION … SET OPTIONS (autoscale_max_slots = N)`. A reservation with no baseline and `autoscale_max_slots = 0` gets only idle slots, and none once the commitment ends.
+   - **Autoscaling:** keep it on: it covers demand above the commitment. `AUTOSCALE_SLOTS` keeps each reservation's maximum size, so a lower baseline gets more autoscale and a higher one less. The recommendation's savings assume the same maximum. A reservation with no baseline and `autoscale_max_slots = 0` gets only idle slots, and none once the commitment ends.
 
 #### CHANGE_RENEWAL
 
@@ -199,15 +203,16 @@ The BigQuery console has the same actions: **Workload management** → **Slot co
 
 | Recommendation | When to Apply | When to Skip or Investigate |
 | --- | --- | --- |
-| Buy or increase a commitment | Live commitments match the row; demand is steady and no decline is planned within the term | Live commitments differ (skip until the next refresh); a migration or decommission is planned; `days` below 30 |
+| Buy a commitment | Live commitments match the row; demand is steady and no decline is planned within the term | Live commitments differ (skip until the next refresh); a migration or decommission is planned; `days` below 30 |
 | Decrease at renewal | Before the earliest `ends_at`, when the lower demand is expected to last | Planned growth would need the slots back |
-| Set baselines | A commitment is `ACTIVE`, or the group has none, and the baselines don't add up to `total_baseline_slots` | A commitment bought for this row isn't `ACTIVE` yet |
+| Set baselines | A commitment is `ACTIVE`, or the group has none, and the baselines don't add up to `total_slot_capacity` | A commitment bought for this row isn't `ACTIVE` yet |
 
 ## Common Pitfalls
 
 - **Buying From a Stale Row**: Buying again after a purchase made since `last_updated_time`, including one that is still `PENDING`. Always run the live commitments check first.
 - **Baselines Before the Commitment Is Active**: Uncovered baseline must be a multiple of 50 and is billed at pay-as-you-go rates.
 - **Letting a Commitment End Without Lowering Baselines**: Baseline slots stay billed, at pay-as-you-go rates once the commitment is gone.
+- **Changing a Baseline Without Moving Autoscale**: The reservation's maximum size moves with the baseline. Lowering it slows peaks; raising it adds autoscale the savings didn't assume.
 - **Invalid Commitment IDs**: `CREATE CAPACITY` rejects uppercase letters and IDs already used in the project and location.
 - **DDL on Terraform-Managed Resources**: The next `terraform apply` reverts the change.
 
