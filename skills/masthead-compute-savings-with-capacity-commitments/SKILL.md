@@ -145,18 +145,18 @@ If the commitments or reservations are managed in Terraform, make the change in 
    ALTER RESERVATION `ADMIN_PROJECT.region-LOCATION.RESERVATION_ID`
    SET OPTIONS (
      slot_capacity = BASELINE_SLOTS,
-     autoscale_max_slots = AUTOSCALE_SLOTS
+     autoscale_max_slots = GREATEST(0, MAX_SLOTS - BASELINE_SLOTS)
    );
    ```
 
-   `AUTOSCALE_SLOTS` keeps the reservation's maximum size (baseline plus `autoscale_max_slots`) as it is: `slot_capacity + autoscale_max_slots − BASELINE_SLOTS`, rounded up to a multiple of 50 (BigQuery rejects other values), or 0 if that is negative. Take `slot_capacity` and `autoscale_max_slots` from the row, or from the reservations query in Step 4 when it shows different current values. Fill it in together with `BASELINE_SLOTS`; the user can change it.
+   `MAX_SLOTS` is the reservation's current maximum size, `slot_capacity + autoscale_max_slots` from the row (or from the reservations query in Step 4 when it shows different current values). Always write it as a number, for example `GREATEST(0, 500 - BASELINE_SLOTS)`. Replace `BASELINE_SLOTS` on both lines with the same number: `autoscale_max_slots` then keeps the maximum, or goes to 0 when the baseline is above it. Use baselines in steps of 50: BigQuery accepts only multiples of 50 for `autoscale_max_slots`.
 
 3. Timing and rules:
    - **After `CREATE_CAPACITY`:** run once the new commitment is `ACTIVE`. Baseline that committed slots don't cover must be a multiple of 50 and is billed at pay-as-you-go rates.
    - **After `CHANGE_RENEWAL`, or on a `Set baseline` row whose `active_committed_slots` is above `total_slot_capacity` (a smaller size is already scheduled to renew):** lower the baselines to `total_slot_capacity` on or before the earliest `ends_at` (`active_commitment_ends_at`). The savings start when the larger commitment ends, not when the baselines go down.
    - **`total_slot_capacity` is 0:** set every baseline to 0.
    - **`ignore_idle_slots = true` with no baseline:** offer `ALTER RESERVATION … SET OPTIONS (ignore_idle_slots = false)` so the reservation can use idle slots.
-   - **Autoscaling:** keep it on: it covers demand above the commitment. `AUTOSCALE_SLOTS` keeps each reservation's maximum size, so a lower baseline gets more autoscale and a higher one less. The recommendation's savings assume the same maximum. A reservation with no baseline and `autoscale_max_slots = 0` gets only idle slots, and none once the commitment ends.
+   - **Autoscaling:** keep it on: it covers demand above the commitment. `GREATEST(0, MAX_SLOTS - BASELINE_SLOTS)` keeps each reservation's maximum size, so a lower baseline gets more autoscale and a higher one less. The recommendation's savings assume the same maximum. A reservation with no baseline and `autoscale_max_slots = 0` gets only idle slots, and none once the commitment ends.
 
 #### CHANGE_RENEWAL
 
