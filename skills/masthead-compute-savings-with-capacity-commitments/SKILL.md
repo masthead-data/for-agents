@@ -8,7 +8,7 @@ compatibility: Requires gcloud CLI, bq command-line tool. Must have read-only pe
 
 ## Purpose
 
-Translate Masthead capacity commitment recommendations (`Capacity commitment` rows in the exported `insights` table) into reviewed, user-executed changes: buy or grow a commitment, change what renews, and set reservation baselines.
+Translate Masthead capacity commitment recommendations (`Capacity commitment` rows in the exported `insights` table) into reviewed, user-executed changes: buy a commitment, change what renews, and set reservation baselines.
 
 ## When to Use
 
@@ -138,7 +138,7 @@ If the commitments or reservations are managed in Terraform, make the change in 
 
 `total_slot_capacity` is the total to split across `reservations`; each reservation's `slot_capacity` and `autoscale_max_slots` are its baseline and autoscale maximum at the end of the previous day.
 
-1. Show the reservations with their current baselines and `ignore_idle_slots`, and ask the user how to split `total_slot_capacity`. Don't propose a split: the user knows which workloads run steadily. The baselines should add up to it: baseline above the committed slots is billed at pay-as-you-go rates. Baseline suits reservations that run steadily. Committed slots that a reservation isn't using are idle slots, which reservations with `ignore_idle_slots = false` use before they autoscale.
+1. Show the reservations with their current baselines, `autoscale_max_slots` and `ignore_idle_slots`, and ask the user how to split `total_slot_capacity`. Don't propose a split: the user knows which workloads run steadily. The baselines should add up to it: baseline above the committed slots is billed at pay-as-you-go rates. Baseline suits reservations that run steadily. Committed slots that a reservation isn't using are idle slots, which reservations with `ignore_idle_slots = false` use before they autoscale.
 2. Write one statement per reservation whose baseline changes, with the user's numbers. Until the user gives them, keep `BASELINE_SLOTS` as a placeholder; fill it in yourself only when the split is fixed (one reservation, or a total of 0):
 
    ```sql
