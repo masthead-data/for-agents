@@ -21,12 +21,12 @@ Each element of `principals` is one BigQuery assignment to create, with every `O
 }
 ```
 
-| Field | Use as |
-| --- | --- |
-| `principal` | the `principal` option verbatim (`principal://goog/subject/…` for users, `principal://iam.googleapis.com/projects/-/serviceAccounts/…` for service accounts) |
-| `source_project` | `assignee = 'projects/<source_project>'`—the project the principal's jobs run in, not the admin project |
-| `job_type` | the `job_type` option: `QUERY` or `PIPELINE` (load, copy, extract). A principal running both kinds appears twice, once per kind—create both assignments |
-| `email` | display only; never derive `principal` from it yourself |
+| Field            | Use as                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `principal`      | the `principal` option verbatim (`principal://goog/subject/…` for users, `principal://iam.googleapis.com/projects/-/serviceAccounts/…` for service accounts) |
+| `source_project` | `assignee = 'projects/<source_project>'`—the project the principal's jobs run in, not the admin project                                                      |
+| `job_type`       | the `job_type` option: `QUERY` or `PIPELINE` (load, copy, extract). A principal running both kinds appears twice, once per kind—create both assignments      |
+| `email`          | display only; never derive `principal` from it yourself                                                                                                      |
 
 `reservation` may name a reservation that does not exist yet (`BQ_ADMIN_PROJECT` / `RESERVATION_ID` placeholders): create it first with the row's `CREATE_RESERVATION` action, then use the same name here.
 
@@ -124,7 +124,7 @@ resource "google_bigquery_reservation_assignment" "query_assignment" {
 
 ## 4. `bq` CLI
 
-*Use `bq` commands only when native SQL DDL or declarative Terraform is not available.*
+_Use `bq` commands only when native SQL DDL or declarative Terraform is not available._
 Documentation: [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) | [`bq rm --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_rm) | [`bq ls --reservation_assignments`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_ls)
 
 ### Assign Project or Specific Principal to Reservation

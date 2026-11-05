@@ -38,18 +38,14 @@ const { autoAssignActions } = require("@masthead-data/dataform-package");
 
 const RESERVATION_CONFIG = [
   {
-    reservation: 'projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID',
-    actions: [
-      'project.dataset.table_a',
-      'project.dataset.table_b'
-    ]
+    reservation:
+      "projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID",
+    actions: ["project.dataset.table_a", "project.dataset.table_b"],
   },
   {
-    reservation: 'none', // Routes to On-Demand capacity
-    actions: [
-      'project.dataset.table_ad_hoc'
-    ]
-  }
+    reservation: "none", // Routes to On-Demand capacity
+    actions: ["project.dataset.table_ad_hoc"],
+  },
 ];
 
 autoAssignActions(RESERVATION_CONFIG);
@@ -100,13 +96,13 @@ In `dbt_project.yml`:
 ```yaml
 vars:
   RESERVATION_CONFIG:
-    - reservation: 'projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID'
+    - reservation: "projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID"
       models:
-        - 'model.package.stg_orders'
-        - 'model.package.fct_daily_sales'
-    - reservation: 'none' # Routes to On-Demand capacity
+        - "model.package.stg_orders"
+        - "model.package.fct_daily_sales"
+    - reservation: "none" # Routes to On-Demand capacity
       models:
-        - 'model.package.int_infrequent_rollup'
+        - "model.package.int_infrequent_rollup"
 ```
 
 ### Step 4: Validate
@@ -138,16 +134,11 @@ Create or update `reservations_config.json` in the root of your `dags/` folder. 
   "reservation_config": [
     {
       "reservation": "projects/ADMIN_PROJECT/locations/LOCATION/reservations/RESERVATION_ID",
-      "tasks": [
-        "core_pipeline.execute_transform",
-        "hourly_sync.load_events"
-      ]
+      "tasks": ["core_pipeline.execute_transform", "hourly_sync.load_events"]
     },
     {
       "reservation": "none",
-      "tasks": [
-        "reporting_dag.weekly_summary"
-      ]
+      "tasks": ["reporting_dag.weekly_summary"]
     }
   ]
 }

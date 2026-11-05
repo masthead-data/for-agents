@@ -70,20 +70,20 @@ ORDER BY savings_30d DESC"
 #### Row Contract & Rules
 
 - **Alternative End-States**: Each row is an independently simulated plan for a workload group. **Rows whose operations touch the same reservation are mutually exclusive alternative end-states, not composable steps.** Select the row yielding the highest verified savings and skip alternatives.
-- **Negative Savings**: Discard any row where `savings_30d <= 0` (the simulated setup costs *more* than the status quo).
+- **Negative Savings**: Discard any row where `savings_30d <= 0` (the simulated setup costs _more_ than the status quo).
 - **Recalculation Freshness**: Check `last_updated_time`. Rows are regenerated periodically; re-verify before finalizing a proposal.
 
 ### Step 2: Audit Simulation Reliability & Caveats
 
 To ensure reliable optimization with **zero performance degradation**, evaluate `status` and all entries in `status_data`:
 
-| Status / Caveat Type | Meaning & Enterprise Impact | Required Action |
-| --- | --- | --- |
-| `status = 'DRAFT'` | Provisional plan; simulation could not fully verify all workload variables. | **Do not auto-apply.** Prepare proposal for manual engineering review. |
-| `UNMET_PERFORMANCE` | No simulated reservation size met the performance criteria; closest option chosen. | **High Risk.** Workloads may experience latency spikes or miss SLAs. Require human approval and set up latency monitoring. |
-| `SKIPPED_WORKLOAD` | Workload for listed entities (`totalSlotMs`, `repositories`, `sourceProjects`) was excluded from simulation (e.g. models spanning multiple reservations). | **Do not route skipped workloads** and **do not count their slot hours toward savings**. |
-| `MAX_PLAN_PROJECTS` | Workload group exceeded the simulation project limit; costs are plan estimates. | Flag that numbers are theoretical estimates rather than cycle-accurate simulations. |
-| `UNMAPPED_WORKLOAD` | Workloads had no pipeline mapping; costs are plan estimates. | Require manual validation of underlying query patterns. |
+| Status / Caveat Type | Meaning & Enterprise Impact                                                                                                                               | Required Action                                                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `status = 'DRAFT'`   | Provisional plan; simulation could not fully verify all workload variables.                                                                               | **Do not auto-apply.** Prepare proposal for manual engineering review.                                                     |
+| `UNMET_PERFORMANCE`  | No simulated reservation size met the performance criteria; closest option chosen.                                                                        | **High Risk.** Workloads may experience latency spikes or miss SLAs. Require human approval and set up latency monitoring. |
+| `SKIPPED_WORKLOAD`   | Workload for listed entities (`totalSlotMs`, `repositories`, `sourceProjects`) was excluded from simulation (e.g. models spanning multiple reservations). | **Do not route skipped workloads** and **do not count their slot hours toward savings**.                                   |
+| `MAX_PLAN_PROJECTS`  | Workload group exceeded the simulation project limit; costs are plan estimates.                                                                           | Flag that numbers are theoretical estimates rather than cycle-accurate simulations.                                        |
+| `UNMAPPED_WORKLOAD`  | Workloads had no pipeline mapping; costs are plan estimates.                                                                                              | Require manual validation of underlying query patterns.                                                                    |
 
 > [!IMPORTANT]
 > Whenever `status = 'DRAFT'` or `status_data` is non-empty, your proposal **must** include a `Notes & Risk Assessment` section explicitly detailing each caveat, its scope, and the performance implications for the plan.
@@ -109,14 +109,14 @@ The `operations` array contains atomic actions in their strict execution order:
 
 When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DDL -> Declarative Terraform -> CLI (`bq`) fallback** (use `bq` only when SQL DDL is not supported or as a secondary fallback):
 
-| Recommendation Action | SQL DDL | Terraform | bq CLI | Detailed Reference |
-| :--- | :--- | :--- | :--- | :--- |
-| `CREATE_RESERVATION` | [`CREATE RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_reservation) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) *(when SQL/TF unavailable)* | [reservation-operations.md](references/reservation-operations.md#1-create_reservation) |
-| `ALTER_RESERVATION` | [`ALTER RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_reservation) | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation) | [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update) *(when SQL/TF unavailable)* | [reservation-operations.md](references/reservation-operations.md#2-alter_reservation) |
-| `ENABLE_FLUID_AUTOSCALING` | [`ALTER PROJECT SET OPTIONS`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_project) | [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) (executes SQL) | [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query) (executes SQL) | [reservation-operations.md](references/reservation-operations.md#3-enable_fluid_autoscaling) |
-| `ALLOW_FLEXIBLE_ASSIGNMENT` | *N/A (No SQL DDL for reservation IAM)* | [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) *(with IAM condition)* | [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy) | [reservation-operations.md](references/reservation-operations.md#4-allow_flexible_assignment) |
-| `RESERVATION_CONFIG` (`PRINCIPAL`) | [`CREATE ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) / [`DROP ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment) | [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment) | [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) *(when SQL/TF unavailable)* | [principal-routing.md](references/principal-routing.md) |
-| `RESERVATION_CONFIG` (`DAG_MODEL`) | Orchestration packages | Dataform / dbt / Airflow package config | *N/A* | [orchestration-templates.md](references/orchestration-templates.md) |
+| Recommendation Action              | SQL DDL                                                                                                                                                                                                                                                       | Terraform                                                                                                                                                                         | bq CLI                                                                                                                                  | Detailed Reference                                                                            |
+| :--------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| `CREATE_RESERVATION`               | [`CREATE RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_reservation)                                                                                                                             | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation)                                              | [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) _(when SQL/TF unavailable)_            | [reservation-operations.md](references/reservation-operations.md#1-create_reservation)        |
+| `ALTER_RESERVATION`                | [`ALTER RESERVATION`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_reservation)                                                                                                                               | [`google_bigquery_reservation`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation)                                              | [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update) _(when SQL/TF unavailable)_    | [reservation-operations.md](references/reservation-operations.md#2-alter_reservation)         |
+| `ENABLE_FLUID_AUTOSCALING`         | [`ALTER PROJECT SET OPTIONS`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_project)                                                                                                                           | [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) (executes SQL)                                                                    | [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query) (executes SQL)                                 | [reservation-operations.md](references/reservation-operations.md#3-enable_fluid_autoscaling)  |
+| `ALLOW_FLEXIBLE_ASSIGNMENT`        | _N/A (No SQL DDL for reservation IAM)_                                                                                                                                                                                                                        | [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) _(with IAM condition)_ | [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy)                | [reservation-operations.md](references/reservation-operations.md#4-allow_flexible_assignment) |
+| `RESERVATION_CONFIG` (`PRINCIPAL`) | [`CREATE ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) / [`DROP ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment) | [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment)                        | [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) _(when SQL/TF unavailable)_ | [principal-routing.md](references/principal-routing.md)                                       |
+| `RESERVATION_CONFIG` (`DAG_MODEL`) | Orchestration packages                                                                                                                                                                                                                                        | Dataform / dbt / Airflow package config                                                                                                                                           | _N/A_                                                                                                                                   | [orchestration-templates.md](references/orchestration-templates.md)                           |
 
 ### 1. Reservation Configuration (`CREATE_RESERVATION` / `ALTER_RESERVATION`)
 
@@ -141,7 +141,7 @@ When guiding BigQuery actions, follow the engineering hierarchy: **Native SQL DD
 ### 3. Permissions (`ALLOW_FLEXIBLE_ASSIGNMENT`)
 
 - Grants `roles/bigquery.resourceEditor` (least-privilege predefined role providing `bigquery.reservations.use`) on the target reservation resource to each identity in `principals`.
-- **Implementation Hierarchy** *(Note: BigQuery does not support SQL DDL for reservation-scoped IAM; the Terraform provider does not include a dedicated reservation IAM resource)*:
+- **Implementation Hierarchy** _(Note: BigQuery does not support SQL DDL for reservation-scoped IAM; the Terraform provider does not include a dedicated reservation IAM resource)_:
   1. **Terraform**: Declarative resource [`google_project_iam_member`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_project_iam#google_project_iam_member) with an IAM condition restricting `resource.name` to the specific reservation.
   2. **bq CLI**: Imperative [`bq set-iam-policy --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_set-iam-policy).
 - **Details & Syntax**: See [reservation-operations.md](references/reservation-operations.md#4-allow_flexible_assignment).
@@ -154,12 +154,12 @@ Routes target workloads to the designated reservation or on-demand (`"none"`):
   - **Dataform**: Configure `definitions/_reservations.js` via `@masthead-data/dataform-package`.
   - **dbt**: Configure `dbt_project.yml` via `masthead-data/bq_reservations`.
   - **Airflow**: Configure `reservations_config.json` via `airflow-reservations`.
-  - *Full package setups and code examples*: See [orchestration-templates.md](references/orchestration-templates.md).
+  - _Full package setups and code examples_: See [orchestration-templates.md](references/orchestration-templates.md).
 - **For Principals (`PRINCIPAL`)**: Implement identity-level routing. Each `principals[]` element carries `principal` (assignment identifier), `source_project` (assignee project) and `job_type` (`QUERY` | `PIPELINE`)—one `CREATE ASSIGNMENT` per element, values verbatim:
   1. **SQL DDL**: Native BigQuery SQL DDL ([`CREATE ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_assignment) / [`DROP ASSIGNMENT`](https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_assignment)) or session variable ([`SET @@reservation`](https://cloud.google.com/bigquery/docs/reference/standard-sql/system-variables)).
   2. **Terraform**: Declarative resource [`google_bigquery_reservation_assignment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_reservation_assignment).
   3. **bq CLI**: [`bq mk --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk) (with `--principal`) and [`bq rm --reservation_assignment`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_rm) when SQL DDL or Terraform is not available.
-  - *Full commands, Terraform resources, and session examples*: See [principal-routing.md](references/principal-routing.md).
+  - _Full commands, Terraform resources, and session examples_: See [principal-routing.md](references/principal-routing.md).
 
 ---
 
@@ -193,12 +193,12 @@ ORDER BY project_id, reservation_name"
 
 ## Decision Criteria: Reserved Slots vs. On-Demand
 
-| Evaluation Factor | Reserved Slots (Autoscale) | On-Demand (`none`) |
-| :--- | :--- | :--- |
-| **Workload Profile** | High frequency, predictable queries, baseline data transforms. | Infrequent, bursty, exploratory queries, low slot-ms footprint. |
-| **SLA & Performance** | Strict SLAs; requires guaranteed slot pool and priority scheduling. | Flexible timing; benefits from instant access to up to 2,000 on-demand slots. |
-| **Cost Dynamics** | Economical for high slot-hour volumes under fixed/autoscale pricing. | Economical when queries scan modest data and run sporadically. |
-| **Impact of Shift** | Protects organization budget from run-away query consumption. | Frees reservation slots for critical path workloads without throttling. |
+| Evaluation Factor     | Reserved Slots (Autoscale)                                           | On-Demand (`none`)                                                            |
+| :-------------------- | :------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
+| **Workload Profile**  | High frequency, predictable queries, baseline data transforms.       | Infrequent, bursty, exploratory queries, low slot-ms footprint.               |
+| **SLA & Performance** | Strict SLAs; requires guaranteed slot pool and priority scheduling.  | Flexible timing; benefits from instant access to up to 2,000 on-demand slots. |
+| **Cost Dynamics**     | Economical for high slot-hour volumes under fixed/autoscale pricing. | Economical when queries scan modest data and run sporadically.                |
+| **Impact of Shift**   | Protects organization budget from run-away query consumption.        | Frees reservation slots for critical path workloads without throttling.       |
 
 ---
 

@@ -1,11 +1,11 @@
 # Data Scan Table Contract
 
-| Column | Type | Meaning |
-| --- | --- | --- |
-| `table_reference` | `STRING` | `project.dataset.table` of the monitored table; incidents attach to it |
-| `rule_name` | `STRING` | Metric name; stable, becomes the incident's metric |
-| `timestamp` | `TIMESTAMP` | Start of the period the value describes |
-| `value` | `INT64`, `FLOAT64`, `NUMERIC`, `BIGNUMERIC` | Metric value |
+| Column            | Type                                        | Meaning                                                                |
+| ----------------- | ------------------------------------------- | ---------------------------------------------------------------------- |
+| `table_reference` | `STRING`                                    | `project.dataset.table` of the monitored table; incidents attach to it |
+| `rule_name`       | `STRING`                                    | Metric name; stable, becomes the incident's metric                     |
+| `timestamp`       | `TIMESTAMP`                                 | Start of the period the value describes                                |
+| `value`           | `INT64`, `FLOAT64`, `NUMERIC`, `BIGNUMERIC` | Metric value                                                           |
 
 Masthead reads `SELECT * FROM <scan table> WHERE timestamp >= <window start>` on every run and resamples each `(table_reference, rule_name)` series to the scan frequency. The customer's scheduled refresh writes the table; Masthead never reads the source tables.
 
@@ -13,12 +13,12 @@ Masthead reads `SELECT * FROM <scan table> WHERE timestamp >= <window start>` on
 
 Candidates to propose when the user hasn't named a metric. Each one needs a time column on the source table.
 
-| Metric | `rule_name` example | Pattern | Good fit |
-| --- | --- | --- | --- |
-| Row volume per period | `orders_row_count` | `COUNT(*)` | Any append or partitioned table; catches dropped or duplicated loads |
-| Distinct keys per period | `distinct_customer_ids` | `COUNT(DISTINCT <key>)` | Event or fact tables keyed by customer, account, or device |
-| Business sum | `revenue_usd` | `SUM(<amount>)` | Revenue, cost, or quantity columns the business tracks |
-| Business sum per group | `cost_usd / <group>` | Zero-filled per group, as in the per-group example | A few dozen stable groups such as country, project, or channel |
+| Metric                   | `rule_name` example     | Pattern                                            | Good fit                                                             |
+| ------------------------ | ----------------------- | -------------------------------------------------- | -------------------------------------------------------------------- |
+| Row volume per period    | `orders_row_count`      | `COUNT(*)`                                         | Any append or partitioned table; catches dropped or duplicated loads |
+| Distinct keys per period | `distinct_customer_ids` | `COUNT(DISTINCT <key>)`                            | Event or fact tables keyed by customer, account, or device           |
+| Business sum             | `revenue_usd`           | `SUM(<amount>)`                                    | Revenue, cost, or quantity columns the business tracks               |
+| Business sum per group   | `cost_usd / <group>`    | Zero-filled per group, as in the per-group example | A few dozen stable groups such as country, project, or channel       |
 
 Prefer `DAILY` unless the table loads more often and the user needs faster alerts.
 
@@ -109,12 +109,12 @@ GROUP BY table_reference, rule_name, `timestamp`
 
 The history SQL fills the table once; the refresh SQL is the scheduled query. Both replace `<from>` and `<to>` in the metric SQL with closed-period boundaries in UTC.
 
-| Frequency | `<to>` (end of the last closed period) | History `<from>` | Refresh `<from>` |
-| --- | --- | --- | --- |
-| `DAILY` | `TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY)` | `<to>` minus 30 days | `<to>` minus 3 days |
+| Frequency        | `<to>` (end of the last closed period)                                                                                         | History `<from>`     | Refresh `<from>`      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------- | --------------------- |
+| `DAILY`          | `TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY)`                                                                                    | `<to>` minus 30 days | `<to>` minus 3 days   |
 | `EVERY_12_HOURS` | `TIMESTAMP_ADD(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY), INTERVAL DIV(EXTRACT(HOUR FROM CURRENT_TIMESTAMP()), 12) * 12 HOUR)` | `<to>` minus 30 days | `<to>` minus 36 hours |
-| `EVERY_6_HOURS` | `TIMESTAMP_ADD(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY), INTERVAL DIV(EXTRACT(HOUR FROM CURRENT_TIMESTAMP()), 6) * 6 HOUR)` | `<to>` minus 30 days | `<to>` minus 18 hours |
-| `HOURLY` | `TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), HOUR)` | `<to>` minus 14 days | `<to>` minus 3 hours |
+| `EVERY_6_HOURS`  | `TIMESTAMP_ADD(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), DAY), INTERVAL DIV(EXTRACT(HOUR FROM CURRENT_TIMESTAMP()), 6) * 6 HOUR)`   | `<to>` minus 30 days | `<to>` minus 18 hours |
+| `HOURLY`         | `TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), HOUR)`                                                                                   | `<to>` minus 14 days | `<to>` minus 3 hours  |
 
 Refresh template — recomputes the last 3 closed periods, so late source data and a missed run both heal on the next run:
 
@@ -132,15 +132,15 @@ WHEN NOT MATCHED THEN INSERT ROW
 
 ## Common mistakes
 
-| Mistake | Effect | Fix |
-| --- | --- | --- |
-| A rolling filter decides which series to keep (`HAVING SUM(cost) >= 1` over the last 30 days) | A series that drops under it stops getting rows and alerts as missing every period | Filter on something stable, or keep low-value series |
-| A series without source rows in a period gets no row | The period is flagged as missing data | Zero-fill from the series' first period: join the series with the periods since it first appeared |
-| `INSERT` instead of `MERGE` in the refresh | A rerun adds a second row for the same period; only one is kept | Use the `MERGE` template |
-| The refresh runs after the processing delay | Masthead reads the period before its row exists and flags it as missing | Use the schedule from the skill, or raise `processDelayHours` |
-| The refresh runs before the source is rebuilt | The newest period is computed from incomplete source data | Schedule the refresh after the source's own update time |
-| `CURRENT_TIMESTAMP() AS timestamp` | Every row lands in the current period, and history collapses | Use the period the value describes |
-| The refresh includes the in-progress period | Its value is partial and changes on every run | End the window at the last closed period |
-| Ratio as a fraction (0–1) | The learned range is too wide to flag anything | Multiply by 100 |
-| NULL in any column | The row is dropped, and the period may be flagged as missing | `IFNULL` or filter the NULLs out |
-| Several rows for the same table, metric, and period | Only one of them is kept | Aggregate in the metric SQL |
+| Mistake                                                                                       | Effect                                                                             | Fix                                                                                               |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| A rolling filter decides which series to keep (`HAVING SUM(cost) >= 1` over the last 30 days) | A series that drops under it stops getting rows and alerts as missing every period | Filter on something stable, or keep low-value series                                              |
+| A series without source rows in a period gets no row                                          | The period is flagged as missing data                                              | Zero-fill from the series' first period: join the series with the periods since it first appeared |
+| `INSERT` instead of `MERGE` in the refresh                                                    | A rerun adds a second row for the same period; only one is kept                    | Use the `MERGE` template                                                                          |
+| The refresh runs after the processing delay                                                   | Masthead reads the period before its row exists and flags it as missing            | Use the schedule from the skill, or raise `processDelayHours`                                     |
+| The refresh runs before the source is rebuilt                                                 | The newest period is computed from incomplete source data                          | Schedule the refresh after the source's own update time                                           |
+| `CURRENT_TIMESTAMP() AS timestamp`                                                            | Every row lands in the current period, and history collapses                       | Use the period the value describes                                                                |
+| The refresh includes the in-progress period                                                   | Its value is partial and changes on every run                                      | End the window at the last closed period                                                          |
+| Ratio as a fraction (0–1)                                                                     | The learned range is too wide to flag anything                                     | Multiply by 100                                                                                   |
+| NULL in any column                                                                            | The row is dropped, and the period may be flagged as missing                       | `IFNULL` or filter the NULLs out                                                                  |
+| Several rows for the same table, metric, and period                                           | Only one of them is kept                                                           | Aggregate in the metric SQL                                                                       |

@@ -63,11 +63,11 @@ WHERE category = 'Cost'
 ORDER BY savings_usd_30d DESC"
 ```
 
-| Subtype | Meaning | `operations`, in order |
-| --- | --- | --- |
-| `Buy commitment` | A commitment, or more committed slots next to the active one, costs less than the current reservations. `active_committed_slots` is 0 when the group has none. | `CREATE_CAPACITY` (`slot_count` is the slots to add), `SET_BASELINES` |
-| `Decrease commitment at renewal` | A smaller commitment, or none, costs less. Savings start after `active_commitment_ends_at`. | `CHANGE_RENEWAL`, `SET_BASELINES` |
-| `Set baseline` | The commitment size is right, or a smaller size is already scheduled to renew, but the reservation baselines don't match it. | `SET_BASELINES` |
+| Subtype                          | Meaning                                                                                                                                                        | `operations`, in order                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `Buy commitment`                 | A commitment, or more committed slots next to the active one, costs less than the current reservations. `active_committed_slots` is 0 when the group has none. | `CREATE_CAPACITY` (`slot_count` is the slots to add), `SET_BASELINES` |
+| `Decrease commitment at renewal` | A smaller commitment, or none, costs less. Savings start after `active_commitment_ends_at`.                                                                    | `CHANGE_RENEWAL`, `SET_BASELINES`                                     |
+| `Set baseline`                   | The commitment size is right, or a smaller size is already scheduled to renew, but the reservation baselines don't match it.                                   | `SET_BASELINES`                                                       |
 
 `savings_usd_30d` compares the group's cost over the row's `period` (`days` days, up to 30) with its cost at `recommended_committed_slots`. Rows come from the latest daily recommendation, and the exported table refreshes once a day, so they don't show a purchase or change made after `last_updated_time`.
 
@@ -201,11 +201,11 @@ The BigQuery console has the same actions: **Workload management** → **Slot co
 
 ## Decision Framework
 
-| Recommendation | When to Apply | When to Skip or Investigate |
-| --- | --- | --- |
-| Buy a commitment | Live commitments match the row; demand is steady and no decline is planned within the term | Live commitments differ (skip until the next refresh); a migration or decommission is planned; `days` below 30 |
-| Decrease at renewal | Before the earliest `ends_at`, when the lower demand is expected to last | Planned growth would need the slots back |
-| Set baselines | A commitment is `ACTIVE`, or the group has none, and the baselines don't add up to `total_slot_capacity` | A commitment bought for this row isn't `ACTIVE` yet |
+| Recommendation      | When to Apply                                                                                            | When to Skip or Investigate                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Buy a commitment    | Live commitments match the row; demand is steady and no decline is planned within the term               | Live commitments differ (skip until the next refresh); a migration or decommission is planned; `days` below 30 |
+| Decrease at renewal | Before the earliest `ends_at`, when the lower demand is expected to last                                 | Planned growth would need the slots back                                                                       |
+| Set baselines       | A commitment is `ACTIVE`, or the group has none, and the baselines don't add up to `total_slot_capacity` | A commitment bought for this row isn't `ACTIVE` yet                                                            |
 
 ## Common Pitfalls
 
