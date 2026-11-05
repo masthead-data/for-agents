@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const errors = [];
 
 function error(msg) {
@@ -23,66 +26,72 @@ function loadJson(relPath) {
     return null;
   }
   try {
-    return JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+    return JSON.parse(fs.readFileSync(fullPath, "utf8"));
   } catch (err) {
     error(`Invalid JSON in ${relPath}: ${err.message}`);
     return null;
   }
 }
 
-console.log('🔍 Validating Multiplatform Plugin Repository...\n');
+console.log("🔍 Validating Multiplatform Plugin Repository...\n");
 
 // 1. Root plugin.json is the Single Source of Truth
-const rootPlugin = loadJson('plugin.json');
+const rootPlugin = loadJson("plugin.json");
 if (!rootPlugin) process.exit(1);
 
 const { name: pluginName, version: pluginVersion } = rootPlugin;
-console.log(`📦 Target Plugin: "${pluginName}" (v${pluginVersion || 'unspecified'})\n`);
+console.log(
+  `📦 Target Plugin: "${pluginName}" (v${pluginVersion || "unspecified"})\n`,
+);
 
 // 2. Declarative Manifest Schema Checks
 const MANIFESTS = [
   {
-    path: 'package.json',
-    required: ['name', 'version', 'scripts'],
-    matchName: true
+    path: "package.json",
+    required: ["name", "version", "scripts"],
+    matchName: true,
   },
   {
-    path: 'plugin.json',
-    required: ['$schema', 'name', 'version', 'description']
+    path: "plugin.json",
+    required: ["$schema", "name", "version", "description"],
   },
   {
-    path: '.claude-plugin/plugin.json',
-    required: ['name', 'skills', 'mcpServers'],
-    matchName: true
+    path: ".claude-plugin/plugin.json",
+    required: ["name", "skills", "mcpServers"],
+    matchName: true,
   },
   {
-    path: '.claude-plugin/marketplace.json',
-    required: ['name', 'owner', 'plugins'],
+    path: ".claude-plugin/marketplace.json",
+    required: ["name", "owner", "plugins"],
     validate: (data) => {
       const match = data.plugins?.some((p) => p.name === pluginName);
-      return match ? null : `Marketplace plugins do not contain "${pluginName}"`;
-    }
+      return match
+        ? null
+        : `Marketplace plugins do not contain "${pluginName}"`;
+    },
   },
   {
-    path: '.codex-plugin/plugin.json',
-    required: ['name', 'skills', 'mcpServers'],
-    matchName: true
-  }
+    path: ".codex-plugin/plugin.json",
+    required: ["name", "skills", "mcpServers"],
+    matchName: true,
+  },
 ];
 
-console.log('--- Checking Platform Manifests ---');
+console.log("--- Checking Platform Manifests ---");
 for (const spec of MANIFESTS) {
   const data = loadJson(spec.path);
   if (!data) continue;
 
   const missing = spec.required.filter((k) => data[k] === undefined);
   if (missing.length > 0) {
-    error(`${spec.path}: Missing required fields: ${missing.join(', ')}`);
+    error(`${spec.path}: Missing required fields: ${missing.join(", ")}`);
     continue;
   }
 
   if (spec.matchName && data.name !== pluginName) {
-    error(`${spec.path}: Name mismatch (expected "${pluginName}", got "${data.name}")`);
+    error(
+      `${spec.path}: Name mismatch (expected "${pluginName}", got "${data.name}")`,
+    );
     continue;
   }
 
@@ -98,19 +107,22 @@ for (const spec of MANIFESTS) {
 }
 
 // 3. Declarative MCP Configurations Validation
-console.log('\n--- Checking MCP Configurations ---');
+console.log("\n--- Checking MCP Configurations ---");
 const MCP_CONFIGS = [
   {
-    path: 'mcp.json',
-    standard: 'Agent Plugins 1.0.0',
-    requireSchema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
-    validateServer: (srv) => srv && ((srv.url && ['streamable-http', 'sse'].includes(srv.type)) || srv.command)
+    path: "mcp.json",
+    standard: "Agent Plugins 1.0.0",
+    requireSchema: "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+    validateServer: (srv) =>
+      srv &&
+      ((srv.url && ["streamable-http", "sse"].includes(srv.type)) ||
+        srv.command),
   },
   {
-    path: 'mcp_config.json',
-    standard: 'Antigravity engine',
-    validateServer: (srv) => srv && (srv.serverUrl || srv.command)
-  }
+    path: "mcp_config.json",
+    standard: "Antigravity engine",
+    validateServer: (srv) => srv && (srv.serverUrl || srv.command),
+  },
 ];
 
 for (const mcp of MCP_CONFIGS) {
@@ -118,7 +130,9 @@ for (const mcp of MCP_CONFIGS) {
   if (!data) continue;
 
   if (mcp.requireSchema && data.$schema !== mcp.requireSchema) {
-    error(`${mcp.path}: "$schema" must be ${mcp.requireSchema} (Codex refuses the file without it)`);
+    error(
+      `${mcp.path}: "$schema" must be ${mcp.requireSchema} (Codex refuses the file without it)`,
+    );
     continue;
   }
   const servers = data.mcpServers ? Object.entries(data.mcpServers) : [];
@@ -137,28 +151,29 @@ for (const mcp of MCP_CONFIGS) {
 }
 
 // 4. Dynamic Skills & Frontmatter Integrity
-console.log('\n--- Checking Skills & Frontmatter Integrity ---');
-const skillsDir = path.join(rootDir, 'skills');
+console.log("\n--- Checking Skills & Frontmatter Integrity ---");
+const skillsDir = path.join(rootDir, "skills");
 
 if (!fs.existsSync(skillsDir)) {
-  error('Missing skills/ directory');
+  error("Missing skills/ directory");
 } else {
-  const skillFolders = fs.readdirSync(skillsDir, { withFileTypes: true })
+  const skillFolders = fs
+    .readdirSync(skillsDir, { withFileTypes: true })
     .filter((dirent) => dirent.isDirectory())
     .map((dirent) => dirent.name);
 
   if (skillFolders.length === 0) {
-    error('skills/ directory contains no subdirectories');
+    error("skills/ directory contains no subdirectories");
   }
 
   for (const folder of skillFolders) {
-    const skillFile = path.join(skillsDir, folder, 'SKILL.md');
+    const skillFile = path.join(skillsDir, folder, "SKILL.md");
     if (!fs.existsSync(skillFile)) {
       error(`skills/${folder}: Missing SKILL.md`);
       continue;
     }
 
-    const content = fs.readFileSync(skillFile, 'utf8');
+    const content = fs.readFileSync(skillFile, "utf8");
     const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!fmMatch) {
       error(`skills/${folder}/SKILL.md: Missing YAML frontmatter`);
@@ -172,11 +187,15 @@ if (!fs.existsSync(skillsDir)) {
     if (!name) {
       error(`skills/${folder}/SKILL.md: Frontmatter missing "name"`);
     } else if (name !== folder) {
-      error(`skills/${folder}/SKILL.md: Frontmatter name "${name}" does not match folder "${folder}"`);
+      error(
+        `skills/${folder}/SKILL.md: Frontmatter name "${name}" does not match folder "${folder}"`,
+      );
     }
 
     if (!desc) {
-      error(`skills/${folder}/SKILL.md: Frontmatter missing or empty "description"`);
+      error(
+        `skills/${folder}/SKILL.md: Frontmatter missing or empty "description"`,
+      );
     }
 
     const body = content.slice(fmMatch[0].length).trim();
@@ -190,11 +209,13 @@ if (!fs.existsSync(skillsDir)) {
 }
 
 // 5. Summary
-console.log('\n================================');
+console.log("\n================================");
 if (errors.length > 0) {
   console.error(`❌ Validation failed with ${errors.length} error(s).`);
   process.exit(1);
 } else {
-  console.log('🎉 All manifests, MCP configs, and skills passed validation successfully!');
+  console.log(
+    "🎉 All manifests, MCP configs, and skills passed validation successfully!",
+  );
   process.exit(0);
 }

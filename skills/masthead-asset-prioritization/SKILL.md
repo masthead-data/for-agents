@@ -12,23 +12,23 @@ Keep monitoring tiers aligned with how much each asset actually matters to the t
 
 ## Operating Modes
 
-* **Recommendation Mode (Default)**: reads scores, lineage and pipelines; produces the review blocks. **No `update_table_priority` or `update_bi_asset_priority` call is made in this mode.**
-* **Action Mode**: applies confirmed tier changes with `update_table_priority` (tables) or `update_bi_asset_priority` (BI assets), one asset at a time, then re-reads to confirm. **Requires the user's explicit sign-off per asset or for a whole listed group.**
+- **Recommendation Mode (Default)**: reads scores, lineage and pipelines; produces the review blocks. **No `update_table_priority` or `update_bi_asset_priority` call is made in this mode.**
+- **Action Mode**: applies confirmed tier changes with `update_table_priority` (tables) or `update_bi_asset_priority` (BI assets), one asset at a time, then re-reads to confirm. **Requires the user's explicit sign-off per asset or for a whole listed group.**
 
 ## How the score works
 
 `list_asset_scores` returns a score between 0 and 1 per asset, **relative to the tenant and asset type** (each signal is normalized across the tenant's assets of that type, then combined), never an absolute threshold. It covers five asset types: `TABLE`, `LOOKER_DASHBOARD`, `LOOKER_LOOK`, `LOOKER_STUDIO_REPORT`, `GOOGLE_SPREADSHEET` — the last four are "BI assets" throughout this skill. The signals, roughly in order of influence:
 
-| Metric key | Meaning |
-| --- | --- |
-| `downstreamCost` | 30-day compute cost of everything that reads the asset |
-| `upstreamCost` | 30-day compute cost of the chain that writes it |
-| `upstreamFreq` | seconds between writes (more frequent = higher signal) |
+| Metric key       | Meaning                                                          |
+| ---------------- | ---------------------------------------------------------------- |
+| `downstreamCost` | 30-day compute cost of everything that reads the asset           |
+| `upstreamCost`   | 30-day compute cost of the chain that writes it                  |
+| `upstreamFreq`   | seconds between writes (more frequent = higher signal)           |
 | `downstreamFreq` | seconds between downstream reads (more frequent = higher signal) |
-| `biAssetsCount` | dashboards, looks and reports that read it |
-| `saReadsCount` | service accounts that read it |
+| `biAssetsCount`  | dashboards, looks and reports that read it                       |
+| `saReadsCount`   | service accounts that read it                                    |
 
-Use the raw `metrics` to say *why* an asset ranks where it does: name the one or two signals that dominate, or say "no observed signal" when they are all 0.
+Use the raw `metrics` to say _why_ an asset ranks where it does: name the one or two signals that dominate, or say "no observed signal" when they are all 0.
 
 Assets with a score of 0 have no observed signal and are not ranked at all (they never appear in `values` and do not count toward percentiles); on large tenants they are the vast majority.
 
@@ -56,8 +56,8 @@ Run every call below **once per in-scope asset type**, with `assetTypes = [<type
 
 For each **raise** candidate:
 
-* `percentile` ≥ 95 → suggest **CRITICAL**; 90 ≤ `percentile` < 95 → suggest **PRIORITY** (shift both when the user chose another percentile `p`: top half of the selected band → CRITICAL, i.e. CRITICAL cut = `(p + 100) / 2`; example: `p` = 80 → PRIORITY for 80–90, CRITICAL for ≥ 90).
-* Reason: one sentence from `metrics`, concrete values, dominant signals first. Example: "3 BI assets, $210 downstream compute in 30 days, read hourly, written daily". If a metric is 0 or missing, say "not observed" instead of quoting the number.
+- `percentile` ≥ 95 → suggest **CRITICAL**; 90 ≤ `percentile` < 95 → suggest **PRIORITY** (shift both when the user chose another percentile `p`: top half of the selected band → CRITICAL, i.e. CRITICAL cut = `(p + 100) / 2`; example: `p` = 80 → PRIORITY for 80–90, CRITICAL for ≥ 90).
+- Reason: one sentence from `metrics`, concrete values, dominant signals first. Example: "3 BI assets, $210 downstream compute in 30 days, read hourly, written daily". If a metric is 0 or missing, say "not observed" instead of quoting the number.
 
 For each **lower** candidate: suggest **REGULAR**, reason from `metrics` in the same form ("no BI assets, no service-account readers, read weekly downstream, $0.4 downstream compute"). A CRITICAL asset is a lowering candidate only when it ranks below the 25th percentile of its type; PRIORITY below the 50th.
 
@@ -79,16 +79,16 @@ Identify each asset as `project.dataset.table` for a `TABLE` row, or `title (url
 
 ### Step 5: Apply (Action Mode only)
 
-Only after the user confirms — per asset, or a whole group such as "all raises" — apply the confirmed tier: `update_table_priority(project, dataset, table, priorityTier)` for `TABLE` rows, `update_bi_asset_priority(assetType, uuid, priorityTier)` for BI-asset rows. `update_bi_asset_priority` returns the changed asset's own score row (matched by `uuid`) and fails if the change was not applied, so its returned `alertType` is the confirmation. For `TABLE` rows, re-read with `list_asset_scores` using the **same `assetTypes = ["TABLE"]` scope as Step 1** (plus `project`/`dataset`) and `alertTiers` set to the *new* tier — the Step 1 filters would otherwise drop the just-changed table out of the result — and match the returned rows by `uuid` to the table just changed: several tables can already sit at the new tier, so a row coming back proves nothing on its own, and a missing `uuid` match means the change is not confirmed and must be reported as such.
+Only after the user confirms — per asset, or a whole group such as "all raises" — apply the confirmed tier: `update_table_priority(project, dataset, table, priorityTier)` for `TABLE` rows, `update_bi_asset_priority(assetType, uuid, priorityTier)` for BI-asset rows. `update_bi_asset_priority` returns the changed asset's own score row (matched by `uuid`) and fails if the change was not applied, so its returned `alertType` is the confirmation. For `TABLE` rows, re-read with `list_asset_scores` using the **same `assetTypes = ["TABLE"]` scope as Step 1** (plus `project`/`dataset`) and `alertTiers` set to the _new_ tier — the Step 1 filters would otherwise drop the just-changed table out of the result — and match the returned rows by `uuid` to the table just changed: several tables can already sit at the new tier, so a row coming back proves nothing on its own, and a missing `uuid` match means the change is not confirmed and must be reported as such.
 
 ## Guardrails
 
-* Never lower a tier, and never change a MUTED asset, without a per-asset yes from the user; "all raises" is a valid group confirmation, "all lowerings" is not.
-* Never call `update_table_priority` or `update_bi_asset_priority` for an asset that was not in the reviewed lists.
-* Assets with a score of 0 are outside the tool's scope, so a prioritized asset with no signal at all is not surfaced as a lowering candidate; mention this when the user asks for a full re-tiering pass.
-* End with a numbered list of actionable next steps: the exact tool call or command, the expected effect on alerting, and how to verify it (re-run `list_asset_scores`, check the asset in the Masthead Dictionary).
+- Never lower a tier, and never change a MUTED asset, without a per-asset yes from the user; "all raises" is a valid group confirmation, "all lowerings" is not.
+- Never call `update_table_priority` or `update_bi_asset_priority` for an asset that was not in the reviewed lists.
+- Assets with a score of 0 are outside the tool's scope, so a prioritized asset with no signal at all is not surfaced as a lowering candidate; mention this when the user asks for a full re-tiering pass.
+- End with a numbered list of actionable next steps: the exact tool call or command, the expected effect on alerting, and how to verify it (re-run `list_asset_scores`, check the asset in the Masthead Dictionary).
 
 ## Documentation
 
-* [About asset priorities in Masthead](https://docs.mastheadata.com/observability/data-dictionary#asset-priorities)
-* [MCP tools reference](https://docs.mastheadata.com/developer/mcp/tools)
+- [About asset priorities in Masthead](https://docs.mastheadata.com/observability/data-dictionary#asset-priorities)
+- [MCP tools reference](https://docs.mastheadata.com/developer/mcp/tools)

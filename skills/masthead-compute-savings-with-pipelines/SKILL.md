@@ -153,7 +153,7 @@ Prepare the configuration diffs, commands, or documentation requested by the use
 ### Step 4: Clean Up Target Tables (Storage Savings)
 
 > [!IMPORTANT]
-> Once a pipeline is paused/disabled, always drop the target table to stop storage costs. Pausing the pipeline *first* is critical: dropping a table while its producer is still active will result in the table being automatically recreated on the next scheduled run.
+> Once a pipeline is paused/disabled, always drop the target table to stop storage costs. Pausing the pipeline _first_ is critical: dropping a table while its producer is still active will result in the table being automatically recreated on the next scheduled run.
 > Run `masthead-storage-savings-with-tables` to identify and drop the tables.
 
 ### Step 5: Verify Savings

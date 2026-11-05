@@ -14,42 +14,42 @@ Add a data quality scan to Masthead end to end. The user describes a metric; the
 
 Masthead has no read access to the customer's data, so it can't run the metric query itself. Before proposing any change, tell the user in your own words:
 
-* **In your project, at your cost**: the metric query runs as a scheduled query (or in your dbt, Dataform, or Airflow) with your credentials or a service account you choose, and writes aggregated values — one number per table, metric, and period — to a table in a `masthead_dq` dataset.
-* **You share one dataset**: Masthead's service account gets read access to `masthead_dq` only. Source datasets, projects, and raw rows stay private.
-* **In Masthead, at Masthead's cost**: Masthead reads that results table on the scan's schedule, learns each metric's expected range, and raises data quality incidents.
+- **In your project, at your cost**: the metric query runs as a scheduled query (or in your dbt, Dataform, or Airflow) with your credentials or a service account you choose, and writes aggregated values — one number per table, metric, and period — to a table in a `masthead_dq` dataset.
+- **You share one dataset**: Masthead's service account gets read access to `masthead_dq` only. Source datasets, projects, and raw rows stay private.
+- **In Masthead, at Masthead's cost**: Masthead reads that results table on the scan's schedule, learns each metric's expected range, and raises data quality incidents.
 
 ## Operating Modes
 
-* **Recommendation Mode (Default)**: read-only. Writes the metric SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects`, `list_data_scans`, and `list_asset_scores` (and `create_data_scan` with `dryRun=true` for a scan table that already exists). No DDL, no `bq` write, no scan change.
-* **Action Mode**: runs each customer-side step (dataset, table, scheduled refresh, grant), the real scan creation, and every update or delete — **each only after the user's explicit yes for that step**. A yes for one step never covers the next. A request to *set up* or *create* a scan, like the [example prompts](#example-prompts), asks for Action Mode: run the read-only steps, show the setup plan, then ask for each change in turn.
+- **Recommendation Mode (Default)**: read-only. Writes the metric SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects`, `list_data_scans`, and `list_asset_scores` (and `create_data_scan` with `dryRun=true` for a scan table that already exists). No DDL, no `bq` write, no scan change.
+- **Action Mode**: runs each customer-side step (dataset, table, scheduled refresh, grant), the real scan creation, and every update or delete — **each only after the user's explicit yes for that step**. A yes for one step never covers the next. A request to _set up_ or _create_ a scan, like the [example prompts](#example-prompts), asks for Action Mode: run the read-only steps, show the setup plan, then ask for each change in turn.
 
 ## How Masthead runs a data scan
 
-* Masthead runs `SELECT * FROM <scan table> WHERE timestamp >= <window start>` as `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com`, in Masthead's project and at Masthead's cost. The scheduled refresh runs in the user's project.
-* Every run adds its own time filter, so the table keeps its history; nothing deletes old periods.
-* Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency, learns its expected range, and flags values outside it as well as periods with no row at all.
-* The first run starts as soon as the scan is created, backfills the last 14 days, and sends no notifications. Its results appear within a few minutes on the scan's page and the monitored table's page in Masthead. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
-* Masthead only reads closed periods — the in-progress period (today, for a `DAILY` scan) is never fetched; a period is read on a run after it has closed. `processDelayHours` adds extra wait after that close. **The scheduled refresh must finish within that delay**, or Masthead finds no row for the period and flags it as missing.
-* Data scans are available in the US region only.
+- Masthead runs `SELECT * FROM <scan table> WHERE timestamp >= <window start>` as `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com`, in Masthead's project and at Masthead's cost. The scheduled refresh runs in the user's project.
+- Every run adds its own time filter, so the table keeps its history; nothing deletes old periods.
+- Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency, learns its expected range, and flags values outside it as well as periods with no row at all.
+- The first run starts as soon as the scan is created, backfills the last 14 days, and sends no notifications. Its results appear within a few minutes on the scan's page and the monitored table's page in Masthead. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
+- Masthead only reads closed periods — the in-progress period (today, for a `DAILY` scan) is never fetched; a period is read on a run after it has closed. `processDelayHours` adds extra wait after that close. **The scheduled refresh must finish within that delay**, or Masthead finds no row for the period and flags it as missing.
+- Data scans are available in the US region only.
 
 ## Scan table contract
 
 The scan table has these columns; extra columns are ignored. Examples and the refresh template: [references/table-contract.md](references/table-contract.md).
 
-| Column | Type | Rule |
-| --- | --- | --- |
-| `table_reference` | `STRING` | `project.dataset.table` of the monitored table the metric describes; incidents attach to it |
-| `rule_name` | `STRING` | Stable metric name; it becomes the incident's metric and cannot be renamed later |
-| `timestamp` | `TIMESTAMP` | Start of the period: `TIMESTAMP_TRUNC(<column>, DAY)` or `TIMESTAMP(<date column>)` |
-| `value` | `INT64`, `FLOAT64`, `NUMERIC`, `BIGNUMERIC` | The metric. Ratios as percents (0–100), because the learned range is very wide for values under 25 |
+| Column            | Type                                        | Rule                                                                                               |
+| ----------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `table_reference` | `STRING`                                    | `project.dataset.table` of the monitored table the metric describes; incidents attach to it        |
+| `rule_name`       | `STRING`                                    | Stable metric name; it becomes the incident's metric and cannot be renamed later                   |
+| `timestamp`       | `TIMESTAMP`                                 | Start of the period: `TIMESTAMP_TRUNC(<column>, DAY)` or `TIMESTAMP(<date column>)`                |
+| `value`           | `INT64`, `FLOAT64`, `NUMERIC`, `BIGNUMERIC` | The metric. Ratios as percents (0–100), because the learned range is very wide for values under 25 |
 
-* One row per `table_reference`, `rule_name`, and period; no NULLs.
-* **A row for every series in every period**, including zero values. A series that stops getting rows is flagged as missing every period. Never decide which series to keep with a rolling-window filter (for example "spend over the last 30 days ≥ $1"): a series that drops under it vanishes and alerts daily. Filter on something stable, or keep low-value series.
-* At least 14 days of history when the scan is created.
-* Aggregated metrics only — never store raw rows.
-* All source tables in one BigQuery location, the same as the `masthead_dq` dataset.
-* At most 1,000 series per scan.
-* Partition the table by `timestamp` (day) and cluster by `table_reference, rule_name`, so Masthead's reads stay cheap.
+- One row per `table_reference`, `rule_name`, and period; no NULLs.
+- **A row for every series in every period**, including zero values. A series that stops getting rows is flagged as missing every period. Never decide which series to keep with a rolling-window filter (for example "spend over the last 30 days ≥ $1"): a series that drops under it vanishes and alerts daily. Filter on something stable, or keep low-value series.
+- At least 14 days of history when the scan is created.
+- Aggregated metrics only — never store raw rows.
+- All source tables in one BigQuery location, the same as the `masthead_dq` dataset.
+- At most 1,000 series per scan.
+- Partition the table by `timestamp` (day) and cluster by `table_reference, rule_name`, so Masthead's reads stay cheap.
 
 ## Workflow
 
@@ -71,8 +71,8 @@ If the user didn't name a table or a metric, propose candidates instead of askin
 
 Then agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, and the scan table name (snake_case, for example `orders_daily_volume`). Write the **metric SQL** to the contract above, with one placeholder window on the source's time column: `<time column> >= <from> AND <time column> < <to>`. Read the source by its partition column where possible, so each refresh stays cheap. From it, derive:
 
-* **History SQL**: the window is the last 30 closed periods, for the initial table.
-* **Refresh SQL**: a `MERGE` of the last 3 closed periods into the table, from the template in [references/table-contract.md](references/table-contract.md). Recomputing 3 periods every run fills in late source data and recovers from a missed run.
+- **History SQL**: the window is the last 30 closed periods, for the initial table.
+- **Refresh SQL**: a `MERGE` of the last 3 closed periods into the table, from the template in [references/table-contract.md](references/table-contract.md). Recomputing 3 periods every run fills in late source data and recovers from a missed run.
 
 ### Step 2: Local checks (read-only)
 
@@ -126,12 +126,12 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
 3. Scheduled refresh. Start from the schedule for the frequency below: each run starts shortly after a period closes, so it finishes well inside the default `processDelayHours` (Step 5). Schedules are in UTC, like the periods. **Then check when the source tables update** (`lastModifiedTime` in `bq show --format=prettyjson <project>:<dataset>.<table>`, or the latest jobs that write them). If a source is rebuilt later than the schedule, move the refresh after that rebuild — still inside the processing delay — or the refresh reads an incomplete period:
 
-   | Frequency | Schedule | Default delay |
-   | --- | --- | --- |
-   | `DAILY` | `every day 01:00` | 12 h |
-   | `EVERY_12_HOURS` | `every 12 hours from 00:30 to 23:59` | 6 h |
-   | `EVERY_6_HOURS` | `every 6 hours from 00:30 to 23:59` | 3 h |
-   | `HOURLY` | `every 1 hours from 00:15 to 23:59` | 1 h |
+   | Frequency        | Schedule                             | Default delay |
+   | ---------------- | ------------------------------------ | ------------- |
+   | `DAILY`          | `every day 01:00`                    | 12 h          |
+   | `EVERY_12_HOURS` | `every 12 hours from 00:30 to 23:59` | 6 h           |
+   | `EVERY_6_HOURS`  | `every 6 hours from 00:30 to 23:59`  | 3 h           |
+   | `HOURLY`         | `every 1 hours from 00:15 to 23:59`  | 1 h           |
 
    ```bash
    bq mk --transfer_config \
@@ -160,13 +160,13 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
 Call `create_data_scan` with `table` (`<project>.masthead_dq.<table_name>`), `name`, `frequency`, optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
 
-| The error says | Fix |
-| --- | --- |
-| Masthead cannot read the table | The Step 3.4 grant is missing |
-| missing column or wrong type | Fix the history SQL and the refresh SQL to the contract, and recreate the table |
-| no rows, NULLs, or a malformed `table_reference` | Fix the SQL and rerun Step 2 |
-| the project is not connected to Masthead | Use a project from `list_projects` |
-| a scan with that name already exists | Pick another name, or manage the existing scan |
+| The error says                                   | Fix                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Masthead cannot read the table                   | The Step 3.4 grant is missing                                                   |
+| missing column or wrong type                     | Fix the history SQL and the refresh SQL to the contract, and recreate the table |
+| no rows, NULLs, or a malformed `table_reference` | Fix the SQL and rerun Step 2                                                    |
+| the project is not connected to Masthead         | Use a project from `list_projects`                                              |
+| a scan with that name already exists             | Pick another name, or manage the existing scan                                  |
 
 ### Step 5: Create (Action Mode)
 
@@ -174,33 +174,33 @@ After the user's yes, call `create_data_scan` with the same arguments and `dryRu
 
 ### Step 6: Manage existing scans
 
-* List: `list_data_scans`. Only scans with `source` `API` can be changed; `MANUAL` scans were set up by Masthead.
-* `update_data_scan` and `delete_data_scan` take the scan's `scanId` — the `id` from `list_data_scans`.
-* Pause or resume: `update_data_scan` with `active` set to `false` or `true`. A paused scan doesn't stop the scheduled refresh.
-* Processing delay: `update_data_scan` with `processDelayHours`.
-* Metric logic: change the refresh SQL of the scheduled query (`bq update --transfer_config --params='{"query":"…"}' <transfer config name>`). The scan keeps its stored history, so old and new values mix in one series; to avoid that, create a new scan table and point the scan at it.
-* Table or frequency: `update_data_scan` with `table` or `frequency` **deletes the scan's history and incidents** and analyzes it again from scratch; warn first. A new frequency also needs a new refresh schedule.
-* Delete: `delete_data_scan`, one scan per confirmation. It removes the scan's results and open incidents; the scan table and the scheduled query stay. Offer to remove them too (`bq rm --transfer_config <transfer config name>`, then `DROP TABLE`), each with its own yes.
-* Scan names can't be changed.
+- List: `list_data_scans`. Only scans with `source` `API` can be changed; `MANUAL` scans were set up by Masthead.
+- `update_data_scan` and `delete_data_scan` take the scan's `scanId` — the `id` from `list_data_scans`.
+- Pause or resume: `update_data_scan` with `active` set to `false` or `true`. A paused scan doesn't stop the scheduled refresh.
+- Processing delay: `update_data_scan` with `processDelayHours`.
+- Metric logic: change the refresh SQL of the scheduled query (`bq update --transfer_config --params='{"query":"…"}' <transfer config name>`). The scan keeps its stored history, so old and new values mix in one series; to avoid that, create a new scan table and point the scan at it.
+- Table or frequency: `update_data_scan` with `table` or `frequency` **deletes the scan's history and incidents** and analyzes it again from scratch; warn first. A new frequency also needs a new refresh schedule.
+- Delete: `delete_data_scan`, one scan per confirmation. It removes the scan's results and open incidents; the scan table and the scheduled query stay. Offer to remove them too (`bq rm --transfer_config <transfer config name>`, then `DROP TABLE`), each with its own yes.
+- Scan names can't be changed.
 
 ## Example prompts
 
-* From the **Set up a data scan** button on the Masthead Data scans tab: "Set up a Masthead data scan on my BigQuery data using the masthead-data-scans skill. Masthead has no read access to my data, so the metric must run in my Google Cloud project: suggest metrics for my CRITICAL and PRIORITY tables (or the table I name), materialize them in a table in a masthead_dq dataset with a scheduled query that keeps it current, grant Masthead read access to that dataset only, then dry-run and create the scan with the Masthead MCP server." Start at Step 0, and propose candidates in Step 1.
-* "Monitor the daily row count and the share of customers without an email in `my-project.crm.customers` with a Masthead data scan." Table and metrics are given; skip the candidate proposal.
-* "Alert me when daily compute cost per project in `my-project.finance.compute_cost_overview` looks unusual." One series per project, zero-filled, as in the reference's per-group example.
+- From the **Set up a data scan** button on the Masthead Data scans tab: "Set up a Masthead data scan on my BigQuery data using the masthead-data-scans skill. Masthead has no read access to my data, so the metric must run in my Google Cloud project: suggest metrics for my CRITICAL and PRIORITY tables (or the table I name), materialize them in a table in a masthead_dq dataset with a scheduled query that keeps it current, grant Masthead read access to that dataset only, then dry-run and create the scan with the Masthead MCP server." Start at Step 0, and propose candidates in Step 1.
+- "Monitor the daily row count and the share of customers without an email in `my-project.crm.customers` with a Masthead data scan." Table and metrics are given; skip the candidate proposal.
+- "Alert me when daily compute cost per project in `my-project.finance.compute_cost_overview` looks unusual." One series per project, zero-filled, as in the reference's per-group example.
 
 ## Guardrails
 
-* Explain [who runs what](#who-runs-what) before the setup plan: the user must know the queries run in their project before agreeing to any change.
-* Masthead's service account gets access to the `masthead_dq` dataset only — never grant it anything on source datasets or projects.
-* Scan tables hold aggregated metrics, never raw rows.
-* Never write to a source table, and never drop or replace a dataset, table, or scheduled query the skill didn't create in this session. Only the scheduled refresh writes to the scan table.
-* Never call `create_data_scan` with `dryRun=false` before a successful dry run of the same arguments.
-* Every DDL statement, `bq mk`, `bq update`, `bq rm`, scan creation, update, and deletion needs its own explicit yes. A reply that is not a clear yes — a typo, another question, a partial answer — is not one: ask again before acting.
-* End with a numbered list of next steps: what was created and where (dataset, table, scheduled query, grant, scan), how to check it (the scan's link, `https://app.mastheadata.com/data-quality/data-scans/<id>`, or `list_data_scans`), and how to undo it.
+- Explain [who runs what](#who-runs-what) before the setup plan: the user must know the queries run in their project before agreeing to any change.
+- Masthead's service account gets access to the `masthead_dq` dataset only — never grant it anything on source datasets or projects.
+- Scan tables hold aggregated metrics, never raw rows.
+- Never write to a source table, and never drop or replace a dataset, table, or scheduled query the skill didn't create in this session. Only the scheduled refresh writes to the scan table.
+- Never call `create_data_scan` with `dryRun=false` before a successful dry run of the same arguments.
+- Every DDL statement, `bq mk`, `bq update`, `bq rm`, scan creation, update, and deletion needs its own explicit yes. A reply that is not a clear yes — a typo, another question, a partial answer — is not one: ask again before acting.
+- End with a numbered list of next steps: what was created and where (dataset, table, scheduled query, grant, scan), how to check it (the scan's link, `https://app.mastheadata.com/data-quality/data-scans/<id>`, or `list_data_scans`), and how to undo it.
 
 ## Documentation
 
-* [Data scans](https://docs.mastheadata.com/governance/data-quality-scans#custom-data-scans)
-* [MCP tools reference](https://docs.mastheadata.com/developer/mcp/tools)
-* [BigQuery scheduled queries](https://cloud.google.com/bigquery/docs/scheduling-queries)
+- [Data scans](https://docs.mastheadata.com/governance/data-quality-scans#custom-data-scans)
+- [MCP tools reference](https://docs.mastheadata.com/developer/mcp/tools)
+- [BigQuery scheduled queries](https://cloud.google.com/bigquery/docs/scheduling-queries)

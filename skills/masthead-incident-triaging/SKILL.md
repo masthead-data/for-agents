@@ -12,9 +12,9 @@ This skill instructs agents on how to triage, analyze, and resolve BigQuery data
 
 ## Prerequisites
 
-* Active connection to the Masthead MCP server: `https://mcp.mastheadata.com/mcp`. A `401 Unauthorized` from any tool means the server is not signed in yet: run `/mcp` in Claude Code or `codex mcp login masthead` in Codex, then retry — no token or service account is needed.
-* Valid bearer token auth or service account configuration.
-* For client setup guides and configuration templates, refer to the [Masthead MCP Server Setup Documentation](https://docs.mastheadata.com/developer/mcp/) and the [MCP Tools Reference](https://docs.mastheadata.com/developer/mcp/tools).
+- Active connection to the Masthead MCP server: `https://mcp.mastheadata.com/mcp`. A `401 Unauthorized` from any tool means the server is not signed in yet: run `/mcp` in Claude Code or `codex mcp login masthead` in Codex, then retry — no token or service account is needed.
+- Valid bearer token auth or service account configuration.
+- For client setup guides and configuration templates, refer to the [Masthead MCP Server Setup Documentation](https://docs.mastheadata.com/developer/mcp/) and the [MCP Tools Reference](https://docs.mastheadata.com/developer/mcp/tools).
 
 ---
 
@@ -22,14 +22,14 @@ This skill instructs agents on how to triage, analyze, and resolve BigQuery data
 
 This skill supports two execution modes:
 
-* **Recommendation Mode (Default)**: Investigates open incidents, analyzes upstream pipelines and downstream lineage impact, classifies severity, and drafts owner assignments and status updates. **Zero writes or modifications are made in this mode.**
+- **Recommendation Mode (Default)**: Investigates open incidents, analyzes upstream pipelines and downstream lineage impact, classifies severity, and drafts owner assignments and status updates. **Zero writes or modifications are made in this mode.**
 
-* **Action Mode**: Applies assignments, status transitions, severity updates, and notes directly to Masthead with `bulk_update_incidents`, one call per group of incidents that get the same change. **Requires explicit user sign-off on the proposed changes before executing.**
+- **Action Mode**: Applies assignments, status transitions, severity updates, and notes directly to Masthead with `bulk_update_incidents`, one call per group of incidents that get the same change. **Requires explicit user sign-off on the proposed changes before executing.**
 
 ### Pacing Options
 
-* **Step-by-Step**: Pauses after Phase 1 (Discovery) and Phase 2 (Impact Analysis) to summarize findings and confirm next steps before proceeding.
-* **Straight Through**: Executes discovery and impact analysis continuously, presenting a full mitigation proposal for review.
+- **Step-by-Step**: Pauses after Phase 1 (Discovery) and Phase 2 (Impact Analysis) to summarize findings and confirm next steps before proceeding.
+- **Straight Through**: Executes discovery and impact analysis continuously, presenting a full mitigation proposal for review.
 
 ---
 
@@ -45,31 +45,31 @@ Find open incidents and extract full contextual failure details.
 
 Before querying incidents, retrieve the list of active GCP project IDs monitored for your tenant to use as filters.
 
-* **Tool**: `list_projects`
-* **Example Prompt**: *"List all GCP projects monitored by Masthead."*
+- **Tool**: `list_projects`
+- **Example Prompt**: _"List all GCP projects monitored by Masthead."_
 
 #### 2. Scan Incidents
 
 Fetch active anomalies and pipeline issues. Start narrow and widen only when the narrow call returns nothing:
 
-* **First call**: `list_incidents` with `statuses` = `OPEN`, `alertTiers` = `CRITICAL`, `PRIORITY`, `from` = 3 days ago, `limit` = 50. Never open with an unfiltered `list_open_incidents`: on a busy tenant it returns thousands of rows that do not fit in context.
-* `total` in the response tells you how much noise exists — it is not an instruction to fetch it all. Paginate only within the filtered set, and only while the pages still hold incidents you intend to act on.
-* The statuses `OPEN`, `IN_PROGRESS`, `ACKNOWLEDGED` require attention, while `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered resolved or non-actionable.
-* Filter the alertTiers to `CRITICAL` or `PRIORITY` to focus on high-impact incidents first.
-* When filtering by date, start with the most recent dates (e.g., last 3 days) to find ongoing incidents, and expand the range if needed to find related past incidents.
-* Based on the access to particular technologies (e.g., dbt, Airflow), filter by pipelineTypes to find relevant pipeline failure incidents.
-* Development or staging projects (or the ones where there is no access) may have many non-actionable incidents that can create noise, so prioritize production projects first.
-* **Tool**: `list_incidents` (`list_open_incidents` returns only the incidents that require attention)
-* **Key Arguments**: `project`, `pipelineTypes`, `alertTiers`, `statuses`, `dataset`, `from`, `to`, `page`, `limit`
-* **Example Prompt**: *"Show incidents in project your-project-id."*
+- **First call**: `list_incidents` with `statuses` = `OPEN`, `alertTiers` = `CRITICAL`, `PRIORITY`, `from` = 3 days ago, `limit` = 50. Never open with an unfiltered `list_open_incidents`: on a busy tenant it returns thousands of rows that do not fit in context.
+- `total` in the response tells you how much noise exists — it is not an instruction to fetch it all. Paginate only within the filtered set, and only while the pages still hold incidents you intend to act on.
+- The statuses `OPEN`, `IN_PROGRESS`, `ACKNOWLEDGED` require attention, while `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered resolved or non-actionable.
+- Filter the alertTiers to `CRITICAL` or `PRIORITY` to focus on high-impact incidents first.
+- When filtering by date, start with the most recent dates (e.g., last 3 days) to find ongoing incidents, and expand the range if needed to find related past incidents.
+- Based on the access to particular technologies (e.g., dbt, Airflow), filter by pipelineTypes to find relevant pipeline failure incidents.
+- Development or staging projects (or the ones where there is no access) may have many non-actionable incidents that can create noise, so prioritize production projects first.
+- **Tool**: `list_incidents` (`list_open_incidents` returns only the incidents that require attention)
+- **Key Arguments**: `project`, `pipelineTypes`, `alertTiers`, `statuses`, `dataset`, `from`, `to`, `page`, `limit`
+- **Example Prompt**: _"Show incidents in project your-project-id."_
 
 #### 3. Retrieve Detailed Failure Logs
 
 Use the incident group UUID to retrieve detailed descriptions of the failure, including the failing table, alert type, and raw error messages.
 
-* **Tool**: `get_incident_details`
-* **Key Arguments**: `incidentGroupUuid` (string)
-* **Example Prompt**: *"Get details for volume incident on table project.dataset.table_id."*
+- **Tool**: `get_incident_details`
+- **Key Arguments**: `incidentGroupUuid` (string)
+- **Example Prompt**: _"Get details for volume incident on table project.dataset.table_id."_
 
 ---
 
@@ -81,9 +81,9 @@ Check which upstream dependencies wrote to the table and what downstream tables,
 
 Check columns count, table type, and active anomaly statuses.
 
-* **Tool**: `get_table_metadata`
-* **Key Arguments**: `project`, `dataset`, `table`
-* **Example Prompt**: *"Get metadata for table your-project-id.your_dataset.your_table."*
+- **Tool**: `get_table_metadata`
+- **Key Arguments**: `project`, `dataset`, `table`
+- **Example Prompt**: _"Get metadata for table your-project-id.your_dataset.your_table."_
 
 #### 2. Identify Upstream Writers / Pipelines
 
@@ -91,24 +91,24 @@ Determine what process or pipeline writes to the target table to see if a pipeli
 
 The error text in `get_incident_details` is **history** — it records what failed at detection time, not what is failing now. Before naming a root cause, compare it with the writer's latest run from `get_table_pipelines`:
 
-* Writer ran successfully **after** the incident's detection time → the cause is already fixed; the incident is a closing candidate, not an escalation.
-* No run at all since detection → the question is why the pipeline stopped (schedule, disabled action, upstream gate), not why it failed.
-* Writer still failing → the error text is current; proceed with it.
+- Writer ran successfully **after** the incident's detection time → the cause is already fixed; the incident is a closing candidate, not an escalation.
+- No run at all since detection → the question is why the pipeline stopped (schedule, disabled action, upstream gate), not why it failed.
+- Writer still failing → the error text is current; proceed with it.
 
 Read direction carefully: `get_table_pipelines` returns the **writer**; pipelines in `get_table_lineage` that read the table are consumers and say nothing about the table's own freshness.
 
-* **Tool**: `get_table_pipelines`
-* **Key Arguments**: `project`, `dataset`, `table`
-* **Example Prompt**: *"Which pipelines write to your-project-id.your_dataset.your_table?"*
+- **Tool**: `get_table_pipelines`
+- **Key Arguments**: `project`, `dataset`, `table`
+- **Example Prompt**: _"Which pipelines write to your-project-id.your_dataset.your_table?"_
 
 #### 3. Trace Downstream Lineage
 
 Trace downstream tables and pipelines to assess blast radius.
 
-* **Tool**: `get_table_lineage`
-* **Key Arguments**: `project`, `dataset`, `table`
-* **Example Prompt**: *"Show the lineage for table your-project-id.your_dataset.another_table to find downstream tables."*
-* **Response Reading**: The tool returns a `ValueResponse`. Look for nodes in the `value.nodes` array where `positionType` is `DOWNSTREAM` and inspect their `info` (e.g., `value.nodes[].info.alertType`).
+- **Tool**: `get_table_lineage`
+- **Key Arguments**: `project`, `dataset`, `table`
+- **Example Prompt**: _"Show the lineage for table your-project-id.your_dataset.another_table to find downstream tables."_
+- **Response Reading**: The tool returns a `ValueResponse`. Look for nodes in the `value.nodes` array where `positionType` is `DOWNSTREAM` and inspect their `info` (e.g., `value.nodes[].info.alertType`).
 
 ---
 
@@ -120,8 +120,8 @@ Take immediate action to assign ownership, document investigation steps, adjust 
 
 Retrieve registered team members in your Masthead tenant to assign tasks correctly.
 
-* **Tool**: `list_users`
-* **Example Prompt**: *"List all active users in my Masthead tenant."*
+- **Tool**: `list_users`
+- **Example Prompt**: _"List all active users in my Masthead tenant."_
 
 #### 2. Apply Owner, Status, Severity, and Notes
 
@@ -129,30 +129,30 @@ Apply the approved changes with one tool. Group incidents that get the same chan
 
 Statuses: `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered final and should be used when the incident is resolved or doesn't require any action. Notes document progress, pipeline rerun confirmations, or root-cause explanations: `ADD` (the default) puts the new note above the existing notes with a `---` separator, `REPLACE` overwrites them.
 
-* **Tool**: `bulk_update_incidents`
-* **Key Arguments**: `incidentGroupUuids` (list), and any of `status`, `severity` (`P1`–`P5`, or `NONE` to clear), `assigneeEmail` (or `NONE` to unassign), `notes` with optional `notesMode` (`ADD` | `REPLACE`)
-* **Result**: one `{groupHash, success, message}` per incident; `message` explains an incident that wasn't updated (for example "Incident not found"). An unknown `assigneeEmail` fails the whole call before anything changes.
-* **Example Prompts**:
-  * *"Assign the three freshness incidents on project.dataset.table_id to <user@yourcompany.com> and mark them as in progress."*
-  * *"Mark incidents <uuid1>, <uuid2> as NO_ACTION_NEEDED with the note 'Expected: weekend batch skipped'."*
-  * *"Escalate incident <uuid> to P1."*
+- **Tool**: `bulk_update_incidents`
+- **Key Arguments**: `incidentGroupUuids` (list), and any of `status`, `severity` (`P1`–`P5`, or `NONE` to clear), `assigneeEmail` (or `NONE` to unassign), `notes` with optional `notesMode` (`ADD` | `REPLACE`)
+- **Result**: one `{groupHash, success, message}` per incident; `message` explains an incident that wasn't updated (for example "Incident not found"). An unknown `assigneeEmail` fails the whole call before anything changes.
+- **Example Prompts**:
+  - _"Assign the three freshness incidents on project.dataset.table_id to <user@yourcompany.com> and mark them as in progress."_
+  - _"Mark incidents <uuid1>, <uuid2> as NO_ACTION_NEEDED with the note 'Expected: weekend batch skipped'."_
+  - _"Escalate incident <uuid> to P1."_
 
 #### 3. Adjust Monitoring Priority (Optional)
 
 For important data assets, elevate its monitoring tier to `PRIORITY` or `CRITICAL` to reduce the time to detect future incidents. On the other hand, if the data asset is not critical and you want to reduce noise, you can lower its monitoring tier to `REGULAR` or `MUTED`.
 
-* **Tool**: `update_table_priority`
-* **Key Arguments**: `project`, `dataset`, `table`, `priorityTier`
-* **Example Prompt**: *"Set the monitoring priority for table your-project-id.your_dataset.your_table to PRIORITY."*
+- **Tool**: `update_table_priority`
+- **Key Arguments**: `project`, `dataset`, `table`, `priorityTier`
+- **Example Prompt**: _"Set the monitoring priority for table your-project-id.your_dataset.your_table to PRIORITY."_
 
 ---
 
 ## Guidelines for AI Agents
 
-* **Verify IDs**: Always invoke `list_projects` and `list_users` first to verify project and email values before executing queries or assignments.
-* **Triage Order**: Always perform Phase 1 (Triage) and Phase 2 (Impact Analysis) before proposing Phase 3 (Mitigation) updates.
-* **Human Review**: Do not silently update incidents without displaying the current state and getting user confirmation first.
-* **Pagination & Large Datasets**: `total` larger than the returned items means more pages exist for the *filtered* query — page through them with `page` (1-indexed) and `limit` while they still hold actionable incidents. Never widen the filter or raise `limit` just to reach `total`.
+- **Verify IDs**: Always invoke `list_projects` and `list_users` first to verify project and email values before executing queries or assignments.
+- **Triage Order**: Always perform Phase 1 (Triage) and Phase 2 (Impact Analysis) before proposing Phase 3 (Mitigation) updates.
+- **Human Review**: Do not silently update incidents without displaying the current state and getting user confirmation first.
+- **Pagination & Large Datasets**: `total` larger than the returned items means more pages exist for the _filtered_ query — page through them with `page` (1-indexed) and `limit` while they still hold actionable incidents. Never widen the filter or raise `limit` just to reach `total`.
 
 ---
 
@@ -160,10 +160,10 @@ For important data assets, elevate its monitoring tier to `PRIORITY` or `CRITICA
 
 If the user asks to open or view an incident, table, or cost detail in the Masthead Web UI, construct and provide a clickable URL using the following templates:
 
-* **Incident Details**: `https://app.mastheadata.com/incident/<incidentGroupUuid>/<lastIncidentId>`
-* **Lineage**:
-  * **Table view**: `https://app.mastheadata.com/lineage?project=<projectId>&dataset=<datasetId>&table=<tableId>`
-  * **Pipeline view**: `https://app.mastheadata.com/lineage?uuid=<pipelineUUID>&type=TABLE&tab=pipeline_view`
-* **Dictionary**:
-  * **Table**: `https://app.mastheadata.com/dictionary/details?project=<projectId>&dataset=<datasetId>&table=<tableId>`
-  * **Dashboards**: `https://app.mastheadata.com/dictionary/reporting-assets?uuid=<assetUUID>&type=<assetType>`
+- **Incident Details**: `https://app.mastheadata.com/incident/<incidentGroupUuid>/<lastIncidentId>`
+- **Lineage**:
+  - **Table view**: `https://app.mastheadata.com/lineage?project=<projectId>&dataset=<datasetId>&table=<tableId>`
+  - **Pipeline view**: `https://app.mastheadata.com/lineage?uuid=<pipelineUUID>&type=TABLE&tab=pipeline_view`
+- **Dictionary**:
+  - **Table**: `https://app.mastheadata.com/dictionary/details?project=<projectId>&dataset=<datasetId>&table=<tableId>`
+  - **Dashboards**: `https://app.mastheadata.com/dictionary/reporting-assets?uuid=<assetUUID>&type=<assetType>`

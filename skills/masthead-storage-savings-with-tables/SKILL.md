@@ -18,17 +18,17 @@ Identify and remove BigQuery tables that contribute to storage costs but have no
 
 Masthead Data uses lineage analysis to identify tables, but relies on visible pipeline references. Modification timestamps are critical:
 
-| Type | Definition | Indicators | Watch for |
-| --- | --- | --- | --- |
-| **Leaf dead-end** | Leaf table in a dead-end chain — regularly updated, no downstream consumers. Directly actionable. | Updated but never read in the look-back window | External writers outside lineage graph (manual jobs, independent pipelines) |
-| **Dead-end** | Upstream table or pipeline that contributes solely to a dead-end chain | Feeds only into dead-end tables | May become resolvable once the leaf dead-end is dropped; re-evaluate after leaf removal |
-| **Unused** | No upstream or downstream activity | No reads/writes in the look-back window | Recent `last_modified_time` (in query output) despite "Unused" flag suggests external writer—**do not drop without verification** |
+| Type              | Definition                                                                                        | Indicators                                     | Watch for                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Leaf dead-end** | Leaf table in a dead-end chain — regularly updated, no downstream consumers. Directly actionable. | Updated but never read in the look-back window | External writers outside lineage graph (manual jobs, independent pipelines)                                                       |
+| **Dead-end**      | Upstream table or pipeline that contributes solely to a dead-end chain                            | Feeds only into dead-end tables                | May become resolvable once the leaf dead-end is dropped; re-evaluate after leaf removal                                           |
+| **Unused**        | No upstream or downstream activity                                                                | No reads/writes in the look-back window        | Recent `last_modified_time` (in query output) despite "Unused" flag suggests external writer—**do not drop without verification** |
 
 The look-back window is the tenant's `dataUsageLookBackDays` from `get_tenant_settings` (30 days unless Masthead configured otherwise). A table modified inside that window but still flagged `Unused` has a writer Masthead cannot see.
 
 **Pattern parents:** `target_resource` may be a wildcard such as `project.dataset.events_*` — Masthead collapses date-sharded siblings into one row whose `num_bytes`, `cost_30d`, and `savings_30d` are summed over the children. `bq rm` does not expand wildcards; see Step 3 for how to list the real tables.
 
-**No billed cost:** `cost_30d` is NULL when Masthead sees no storage bill for the table in your project — a dataset you *subscribe* to rather than own (Analytics Hub listing, Cloud Logging linked bucket), an external table, or a table that no longer exists. Such a row is not a saving: classify it `keep`, do not size it by `total_tib` however large, and never emit a `bq rm` for it. If it is a subscription, the only possible action is unsubscribing from the listing, which is outside this skill.
+**No billed cost:** `cost_30d` is NULL when Masthead sees no storage bill for the table in your project — a dataset you _subscribe_ to rather than own (Analytics Hub listing, Cloud Logging linked bucket), an external table, or a table that no longer exists. Such a row is not a saving: classify it `keep`, do not size it by `total_tib` however large, and never emit a `bq rm` for it. If it is a subscription, the only possible action is unsubscribing from the listing, which is outside this skill.
 
 ### Key Signal
 

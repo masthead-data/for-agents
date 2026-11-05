@@ -53,7 +53,7 @@ resource "google_bigquery_reservation" "reservation" {
 
 ### 3. `bq` CLI (`bq mk`)
 
-*Use `bq` only when SQL DDL or Terraform execution is not available.*
+_Use `bq` only when SQL DDL or Terraform execution is not available._
 Documentation: [`bq mk --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_mk)
 
 ```bash
@@ -102,7 +102,7 @@ resource "google_bigquery_reservation" "reservation" {
 
 ### 3. `bq` CLI (`bq update`)
 
-*Use `bq` only when SQL DDL or Terraform execution is not available.*
+_Use `bq` only when SQL DDL or Terraform execution is not available._
 Documentation: [`bq update --reservation`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_update)
 
 ```bash
@@ -176,7 +176,7 @@ resource "terraform_data" "fluid_autoscaling_config" {
 
 ### 3. `bq` CLI (`bq query`)
 
-*Use `bq` only when running SQL DDL directly via CLI.*
+_Use `bq` only when running SQL DDL directly via CLI._
 Documentation: [`bq query`](https://cloud.google.com/bigquery/docs/reference/bq-cli-reference#bq_query)
 
 ```bash
@@ -223,7 +223,7 @@ resource "google_project_iam_member" "flexible_assignment" {
 
 ### 2. `bq` CLI (`bq get-iam-policy` / `bq set-iam-policy`)
 
-*Used when Terraform is not managing IAM bindings.*
+_Used when Terraform is not managing IAM bindings._
 
 #### Step 1: Export Current Policy
 
