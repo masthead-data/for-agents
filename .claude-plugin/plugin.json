@@ -1,6 +1,6 @@
 {
   "name": "masthead-agent-tools",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Masthead Agent Tools for BigQuery Data Observability and FinOps",
   "author": {
     "name": "Masthead Data",
@@ -8,6 +8,8 @@
     "url": "https://mastheadata.com"
   },
   "homepage": "https://docs.mastheadata.com",
+  "privacyPolicyUrl": "https://mastheadata.com/privacy-policy",
+  "icon": "assets/masthead-icon.png",
   "repository": "https://github.com/masthead-data/for-agents",
   "license": "Apache-2.0",
   "keywords": [
