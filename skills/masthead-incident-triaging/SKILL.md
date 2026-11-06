@@ -1,6 +1,6 @@
 ---
 name: masthead-incident-triaging
-description: Triage, analyze downstream impact, and mitigate data quality and pipeline incidents using the Masthead MCP server.
+description: Triage, analyze downstream impact, and mitigate data quality and pipeline incidents, and link related incidents (cause, impact, same cause) from evidence in the user's environment, using the Masthead MCP server.
 compatibility: Requires connection to the Masthead MCP server at `https://mcp.mastheadata.com/mcp`.
 ---
 
@@ -22,9 +22,11 @@ This skill instructs agents on how to triage, analyze, and resolve BigQuery data
 
 This skill supports two execution modes:
 
-* **Recommendation Mode (Default)**: Investigates open incidents, analyzes upstream pipelines and downstream lineage impact, classifies severity, and drafts owner assignments and status updates. **Zero writes or modifications are made in this mode.**
+* **Recommendation Mode (Default)**: Investigates open incidents, analyzes upstream pipelines and downstream lineage impact, classifies severity, and drafts owner assignments and status updates. **No writes except links and their evidence note (see Relate Incidents).**
 
 * **Action Mode**: Applies assignments, status transitions, severity updates, and notes directly to Masthead with `bulk_update_incidents`, one call per group of incidents that get the same change. **Requires explicit user sign-off on the proposed changes before executing.**
+
+Linking incidents (`link_incidents` / `unlink_incidents`) is lightweight and reversible, so it runs in both modes: show the user a summary of the links with one-line evidence per link, then save them without asking for each link. The evidence note on the cause incident is that same evidence line, so saving the links and that note is covered by the same summary. Any other notes, status, severity or assignee change keeps the sign-off rule.
 
 ### Pacing Options
 
@@ -35,7 +37,7 @@ This skill supports two execution modes:
 
 ## Triage Workflow
 
-Incident response is structured into three consecutive phases: **Discovery & Triaging**, **Impact Analysis**, and **Mitigation/Resolution**.
+Incident response is structured into three consecutive phases: **Discovery & Triaging**, **Impact Analysis**, and **Mitigation/Resolution**, with **Relate Incidents** between Impact Analysis and Mitigation.
 
 ### Phase 1: Discovery & Triaging
 
@@ -60,7 +62,7 @@ Fetch active anomalies and pipeline issues. Start narrow and widen only when the
 * Based on the access to particular technologies (e.g., dbt, Airflow), filter by pipelineTypes to find relevant pipeline failure incidents.
 * Development or staging projects (or the ones where there is no access) may have many non-actionable incidents that can create noise, so prioritize production projects first.
 * **Tool**: `list_incidents` (`list_open_incidents` returns only the incidents that require attention)
-* **Key Arguments**: `project`, `pipelineTypes`, `alertTiers`, `statuses`, `dataset`, `from`, `to`, `page`, `limit`
+* **Key Arguments**: `project`, `pipelineTypes`, `alertTiers`, `statuses`, `dataset`, `table`, `hasRelated`, `from`, `to`, `page`, `limit`
 * **Example Prompt**: *"Show incidents in project your-project-id."*
 
 #### 3. Retrieve Detailed Failure Logs
@@ -70,6 +72,15 @@ Use the incident group UUID to retrieve detailed descriptions of the failure, in
 * **Tool**: `get_incident_details`
 * **Key Arguments**: `incidentGroupUuid` (string)
 * **Example Prompt**: *"Get details for volume incident on table project.dataset.table_id."*
+
+#### 4. Check Existing Links
+
+Check existing links with `get_related_incidents`. If someone already linked an UPSTREAM incident, investigate that one first; a DOWNSTREAM link shows the known impact.
+
+* **Tool**: `get_related_incidents`
+* **Key Arguments**: `incidentGroupUuid` (string)
+* **Result**: links as `{positionType, incident}`, where `positionType` is `UPSTREAM`, `DOWNSTREAM` or `RELATED`.
+* **Example Prompt**: *"Is incident <uuid> already linked to other incidents?"*
 
 ---
 
@@ -112,6 +123,28 @@ Trace downstream tables and pipelines to assess blast radius.
 
 ---
 
+### Relate Incidents
+
+Link incidents that belong together, so the Masthead UI and other users see the cause and the impact. Your environment (dbt project, DAG code, commits, logs) often has more context than Masthead lineage, so link from that evidence. Positions are relative to the incident you link from: `UPSTREAM` is a likely cause, `DOWNSTREAM` is an impact, `RELATED` is the same cause with no direction.
+
+1. **Gather evidence** from the user's environment where available: the dbt project (`ref()` / `source()` chains, model SQL), orchestration code (Airflow/Dataform DAG dependencies), recent commits or deploys, run logs and error text. Masthead lineage (`get_table_lineage`, `get_table_pipelines`) is one source, not the only one.
+2. **Find the incidents**: map the evidence to BigQuery tables and look them up with `list_incidents` (`project`, `dataset`, `table`, the same time window). Don't reuse the Phase 1 `alertTiers` / `statuses` filters here: impacts often sit on REGULAR-tier tables or are already acknowledged. dbt's `target/manifest.json` (`relation_name`, `child_map`) maps models to tables and their children. `hasRelated` = `false` finds incidents nobody has related yet; items carry `relatedCount`.
+3. **Decide the direction** from the evidence: the incident whose failure produced the others is UPSTREAM of them; incidents with the same cause and no order between them are RELATED. Don't link on timing alone, and don't link as DOWNSTREAM an incident that started before its cause.
+4. **Show the summary** (incident, direction, one-line evidence), then save it with one `link_incidents` call per cause incident (lists of upstream / downstream / related uuids); each call changes only the listed links. Record the evidence lines shown in the summary as a note on each cause incident with `bulk_update_incidents` (`notes`, `notesMode` `ADD`); the summary covers this note too. Example: dbt model A feeds table B, A's job failed and B went stale: from B's incident, `upstreamUuids` = [A]; or from A's incident, `downstreamUuids` = [B]. One call is enough, links show on both incidents, and one call from the cause incident covers all its impacts.
+5. **After the fix**: when the cause is fixed, propose closing its DOWNSTREAM incidents together (Phase 3, with sign-off).
+
+* **Tool**: `link_incidents`
+* **Key Arguments**: `incidentGroupUuid`, and any of `upstreamUuids`, `downstreamUuids`, `relatedUuids` (lists of incident group UUIDs)
+* **Result**: adds the links or changes the direction of the listed ones and keeps all other links. A link shows on both incidents. To correct a direction, call `link_incidents` with the right list; use `unlink_incidents` only to remove a link.
+* **Example Prompts**:
+  * *"Incident <uuid1> broke because of <uuid2>; link them."*
+  * *"Find incidents in project your-project-id that share a cause with <uuid> and link them."*
+* **Tool**: `unlink_incidents`
+* **Key Arguments**: `incidentGroupUuid`, `incidentGroupUuids` (the incidents to unlink)
+* **Example Prompt**: *"Remove the link between <uuid1> and <uuid2>, they are not related."*
+
+---
+
 ### Phase 3: Incident Response & Mitigation
 
 Take immediate action to assign ownership, document investigation steps, adjust severity, and update the incident life-cycle.
@@ -151,7 +184,8 @@ For important data assets, elevate its monitoring tier to `PRIORITY` or `CRITICA
 
 * **Verify IDs**: Always invoke `list_projects` and `list_users` first to verify project and email values before executing queries or assignments.
 * **Triage Order**: Always perform Phase 1 (Triage) and Phase 2 (Impact Analysis) before proposing Phase 3 (Mitigation) updates.
-* **Human Review**: Do not silently update incidents without displaying the current state and getting user confirmation first.
+* **Human Review**: Do not silently update incidents without displaying the current state and getting user confirmation first. Linking incidents and their evidence note are the exception: show the summary, then save.
+* **Links Are Shared**: links show in the Masthead UI to other users. Never `unlink_incidents` a link you didn't create in this session without asking. `link_incidents` keeps existing links, so you never need to resend them. If a link already exists with another direction, say so in the summary and ask before changing one you didn't create.
 * **Pagination & Large Datasets**: `total` larger than the returned items means more pages exist for the *filtered* query — page through them with `page` (1-indexed) and `limit` while they still hold actionable incidents. Never widen the filter or raise `limit` just to reach `total`.
 
 ---
