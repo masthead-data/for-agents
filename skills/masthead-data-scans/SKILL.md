@@ -25,7 +25,7 @@ Masthead has no read access to the customer's data, so it can't run the metric q
 
 ## How Masthead runs a data scan
 
-* Masthead runs `SELECT * FROM <scan table> WHERE timestamp >= <window start>` as `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com`, in Masthead's project and at Masthead's cost. The scheduled refresh runs in the user's project.
+* Masthead runs `SELECT * FROM <scan table> WHERE timestamp >= <window start>` as `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com` (or, under workload identity federation, the user's own `quality_sa` account), at Masthead's cost. The scheduled refresh runs in the user's project.
 * Every run adds its own time filter, so the table keeps its history; nothing deletes old periods.
 * Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency, learns its expected range, and flags values outside it as well as periods with no row at all.
 * The first run starts as soon as the scan is created, backfills the last 14 days, and sends no notifications. Its results appear within a few minutes on the scan's page and the monitored table's page in Masthead. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
@@ -153,6 +153,8 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
    GRANT `roles/bigquery.dataViewer` ON SCHEMA `<project>.masthead_dq`
    TO "serviceAccount:masthead-quality-checks@masthead-prod.iam.gserviceaccount.com";
    ```
+
+   If the user's Masthead tenant uses workload identity federation, grant the user's own data scan service account instead (the `quality_sa` they gave Masthead, from their `masthead_federation` output). You can't look it up: ask the user which account it is, or read it from their Terraform. Dry-run validation reads the table as that account, and a permission error names it.
 
    Masthead reads only the scan table, so the source datasets need no change.
 
