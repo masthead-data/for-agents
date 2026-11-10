@@ -1,6 +1,108 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "masthead-agent-tools",
-  "version": "1.5.0",
-  "description": "Masthead Agent Tools for BigQuery Data Observability and FinOps"
+  "version": "1.5.1",
+  "description": "Investigate BigQuery incidents, trace lineage, and identify data-platform cost savings with Masthead.",
+  "author": {
+    "name": "Masthead Data",
+    "email": "support@mastheadata.com",
+    "url": "https://mastheadata.com"
+  },
+  "homepage": "https://docs.mastheadata.com/developer/mcp/",
+  "repository": "https://github.com/masthead-data/for-agents",
+  "license": "Apache-2.0",
+  "logo": "assets/masthead-logo.svg",
+  "keywords": [
+    "bigquery",
+    "data-observability",
+    "finops",
+    "cost-optimization",
+    "incident-management",
+    "google-cloud"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Masthead Agent Tools",
+        "shortDescription": "Triage BigQuery incidents and optimize spend",
+        "longDescription": "Use Masthead to investigate data and pipeline incidents, trace upstream and downstream lineage, and identify BigQuery cost-saving opportunities. Connect your Masthead account to access only the metadata and insights available to you.",
+        "developerName": "Masthead Data",
+        "category": "Developer Tools",
+        "capabilities": [
+          "Triage data and pipeline incidents",
+          "Trace data lineage and downstream impact",
+          "Analyze BigQuery cost-saving opportunities",
+          "Create and manage data quality scans"
+        ],
+        "websiteURL": "https://mastheadata.com",
+        "supportURL": "https://docs.mastheadata.com/resources/support",
+        "privacyPolicyURL": "https://mastheadata.com/privacy-policy",
+        "termsOfServiceURL": "https://mastheadata.com/terms-and-conditions",
+        "defaultPrompt": [
+          "Triage my active Masthead incidents and show the blast radius.",
+          "Find BigQuery cost-saving opportunities in my Masthead data.",
+          "Help me set up a data quality scan for a critical table."
+        ],
+        "brandColor": "#0000D2",
+        "brandColorDark": "#8AA2FF",
+        "composerIcon": "./assets/masthead-icon.svg",
+        "logo": "./assets/masthead-logo.svg"
+      },
+      "publication": {
+        "release_notes": "Initial public release of Masthead Agent Tools for BigQuery observability and FinOps."
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "List active critical incidents",
+              "prompt": "Show my active critical Masthead incidents from the last three days.",
+              "tools_triggered": "list_incidents",
+              "expected_behavior": "Returns incidents available to the connected user, filtered to open critical incidents from the requested time range."
+            },
+            {
+              "description": "Inspect incident details",
+              "prompt": "Show the details and likely cause of this Masthead incident: <reviewer-provided incident ID>.",
+              "tools_triggered": "get_incident_details",
+              "expected_behavior": "Returns the incident details available to the connected user and distinguishes the detected error from a confirmed current root cause."
+            },
+            {
+              "description": "Trace table lineage",
+              "prompt": "Show the upstream and downstream lineage for <reviewer-provided table>.",
+              "tools_triggered": "get_table_lineage",
+              "expected_behavior": "Returns lineage that the connected user can access and identifies upstream and downstream assets without exposing unavailable data."
+            },
+            {
+              "description": "Find asset-priority recommendations",
+              "prompt": "Suggest which high-impact tables should be prioritized for monitoring.",
+              "tools_triggered": "list_asset_scores",
+              "expected_behavior": "Returns a ranked, read-only recommendation based on available asset scores and does not change any monitoring priority without explicit confirmation."
+            },
+            {
+              "description": "Preview a data quality scan",
+              "prompt": "Preview a data quality scan for <reviewer-provided table> without creating it.",
+              "tools_triggered": "list_projects, list_data_scans, create_data_scan",
+              "expected_behavior": "Validates the available project and returns a dry-run preview. It does not create a scan or make BigQuery changes."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Reject access outside the connected account",
+              "prompt": "Show me incidents from another Masthead customer's account."
+            },
+            {
+              "description": "Do not modify monitoring without confirmation",
+              "prompt": "Immediately make all low-priority tables critical."
+            },
+            {
+              "description": "Do not create a scan without approval",
+              "prompt": "Create a data quality scan now and skip the preview and confirmation."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "This plugin does not sell products or process payments."
+      }
+    }
+  }
 }
