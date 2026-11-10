@@ -20,12 +20,12 @@ Masthead has no read access to the customer's data, so it can't run the metric q
 
 ## Operating Modes
 
-* **Recommendation Mode (Default)**: read-only. Writes the metric SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects`, `list_data_scans`, and `list_asset_scores` (and `create_data_scan` with `dryRun=true` for a scan table that already exists). No DDL, no `bq` write, no scan change.
+* **Recommendation Mode (Default)**: read-only. Writes the metric SQL, runs the local checks with the user's credentials, and shows the setup plan. Calls only `list_projects`, `list_data_scans`, `list_asset_scores`, and `get_tenant_settings` (and `create_data_scan` with `dryRun=true` for a scan table that already exists). No DDL, no `bq` write, no scan change.
 * **Action Mode**: runs each customer-side step (dataset, table, scheduled refresh, grant), the real scan creation, and every update or delete — **each only after the user's explicit yes for that step**. A yes for one step never covers the next. A request to *set up* or *create* a scan, like the [example prompts](#example-prompts), asks for Action Mode: run the read-only steps, show the setup plan, then ask for each change in turn.
 
 ## How Masthead runs a data scan
 
-* Masthead runs `SELECT * FROM <scan table> WHERE timestamp >= <window start>` as `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com`, in Masthead's project and at Masthead's cost. The scheduled refresh runs in the user's project.
+* Masthead runs `SELECT * FROM <scan table> WHERE timestamp >= <window start>` as the tenant's data scan service account (see Step 3.4), at Masthead's cost. The scheduled refresh runs in the user's project.
 * Every run adds its own time filter, so the table keeps its history; nothing deletes old periods.
 * Each `(table_reference, rule_name)` pair is one series. Masthead resamples it to the scan frequency, learns its expected range, and flags values outside it as well as periods with no row at all.
 * The first run starts as soon as the scan is created, backfills the last 14 days, and sends no notifications. Its results appear within a few minutes on the scan's page and the monitored table's page in Masthead. Later anomalies raise data quality incidents, which follow the tenant's alert settings.
@@ -147,12 +147,14 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
    The first scheduled query a user creates with `bq mk --transfer_config` needs a one-time browser consent for BigQuery Data Transfer, which an agent's shell can't complete (`bq` stops with "Got EOF"). Say so before this step, and offer two ways: the user runs that one command themselves (in Claude Code, type it after `!`) and opens the consent link it prints, or the query runs as a service account (`--service_account_name`), which needs no consent. Then confirm the result with `bq ls --transfer_config`.
 
-4. Read access for Masthead on that dataset only:
+4. Read access for Masthead on that dataset only, for the account Masthead reads the table as: `credentials.serviceAccounts.qualitySa` from `get_tenant_settings`. Never assume or ask for it.
 
    ```sql
    GRANT `roles/bigquery.dataViewer` ON SCHEMA `<project>.masthead_dq`
-   TO "serviceAccount:masthead-quality-checks@masthead-prod.iam.gserviceaccount.com";
+   TO "serviceAccount:<qualitySa>";
    ```
+
+   If `qualitySa` is null, the tenant uses workload identity federation without a data scan service account, so it can't use data scans yet. Stop and point the user to [Customer-owned service account with Workload Identity Federation](https://github.com/masthead-data/terraform-google-masthead-agent/blob/main/docs/workload-identity-federation.md): `quality_sa` is created in step 1 and shared with Masthead in the `masthead_federation` output. If `get_tenant_settings` returns an error, Masthead couldn't read the tenant's settings: retry later. Dry-run validation reads the table as that account, and a permission error names it.
 
    Masthead reads only the scan table, so the source datasets need no change.
 
