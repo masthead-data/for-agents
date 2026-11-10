@@ -122,6 +122,18 @@ FinOps skills resolve your insights dataset through the `get_tenant_settings` MC
 
 ---
 
+## OpenAI Plugin Submission Package
+
+Create the ZIP to upload to the OpenAI Plugins dashboard for the version declared in `plugin.json`:
+
+```bash
+npm run package:openai
+```
+
+The command writes `dist/masthead-agent-tools-<version>.zip`, excludes Git and local build files, and verifies the archive before reporting its path. Run `npm test` first.
+
+---
+
 ## Available Skills
 
 | Skill | Category | Mode | Description |

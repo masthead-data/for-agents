@@ -9,3 +9,6 @@ node_modules/
 *.log
 scratch/
 .system_generated/
+
+# Release packages
+dist/

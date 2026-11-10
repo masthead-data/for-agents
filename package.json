@@ -1,6 +1,6 @@
 {
   "name": "masthead-agent-tools",
-  "version": "1.6.0",
+  "version": "1.5.2",
   "description": "Masthead Agent Tools for BigQuery Data Observability and FinOps",
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "validate": "node scripts/validate.mjs",
     "validate:cli": "node scripts/validate-cli.mjs",
     "validate:all": "npm run validate && npm run validate:cli",
+    "package:openai": "node scripts/package-openai.mjs",
     "lint:md": "npx -y markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
     "lint:md:fix": "npx -y markdownlint-cli2 --fix \"**/*.md\" \"#node_modules\""
   },
