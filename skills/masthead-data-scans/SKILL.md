@@ -154,7 +154,7 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
    TO "serviceAccount:<qualitySa>";
    ```
 
-   If `qualitySa` is null, the tenant uses workload identity federation without a data scan service account, so it can't use data scans yet. Stop and point the user to [Customer-owned service account with Workload Identity Federation](https://github.com/masthead-data/terraform-google-masthead-agent/blob/main/docs/workload-identity-federation.md): `quality_sa` is created in step 1 and shared with Masthead in the `masthead_federation` output. If `credentials` is null, Masthead couldn't read it: retry later. Dry-run validation reads the table as that account, and a permission error names it.
+   If `qualitySa` is null, the tenant uses workload identity federation without a data scan service account, so it can't use data scans yet. Stop and point the user to [Customer-owned service account with Workload Identity Federation](https://github.com/masthead-data/terraform-google-masthead-agent/blob/main/docs/workload-identity-federation.md): `quality_sa` is created in step 1 and shared with Masthead in the `masthead_federation` output. If `get_tenant_settings` returns an error, Masthead couldn't read the tenant's settings: retry later. Dry-run validation reads the table as that account, and a permission error names it.
 
    Masthead reads only the scan table, so the source datasets need no change.
 
