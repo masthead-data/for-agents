@@ -147,17 +147,14 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
    The first scheduled query a user creates with `bq mk --transfer_config` needs a one-time browser consent for BigQuery Data Transfer, which an agent's shell can't complete (`bq` stops with "Got EOF"). Say so before this step, and offer two ways: the user runs that one command themselves (in Claude Code, type it after `!`) and opens the consent link it prints, or the query runs as a service account (`--service_account_name`), which needs no consent. Then confirm the result with `bq ls --transfer_config`.
 
-4. Read access for Masthead on that dataset only. Read the account Masthead reads the table as from `get_tenant_settings` `credentials`; never assume or ask for it:
-
-   * `type` is `WORKLOAD_IDENTITY_FEDERATION`: `serviceAccounts.qualitySa`, the user's own data scan service account.
-   * Otherwise: `masthead-quality-checks@masthead-prod.iam.gserviceaccount.com`.
+4. Read access for Masthead on that dataset only, for the account Masthead reads the table as: `credentials.serviceAccounts.qualitySa` from `get_tenant_settings`. Never assume or ask for it.
 
    ```sql
    GRANT `roles/bigquery.dataViewer` ON SCHEMA `<project>.masthead_dq`
-   TO "serviceAccount:<data scan service account>";
+   TO "serviceAccount:<qualitySa>";
    ```
 
-   If the tenant uses workload identity federation without a `qualitySa`, it can't use data scans yet. Stop here and tell the user to add `quality_sa` to their Masthead federation setup and ask Masthead to add it to the tenant. If `credentials` is null, Masthead couldn't read it: retry later. Dry-run validation reads the table as that account, and a permission error names it.
+   If `qualitySa` is null, the tenant uses workload identity federation without a data scan service account, so it can't use data scans yet. Stop and point the user to [Customer-owned service account with Workload Identity Federation](https://github.com/masthead-data/terraform-google-masthead-agent/blob/main/docs/workload-identity-federation.md): `quality_sa` is created in step 1 and shared with Masthead in the `masthead_federation` output. If `credentials` is null, Masthead couldn't read it: retry later. Dry-run validation reads the table as that account, and a permission error names it.
 
    Masthead reads only the scan table, so the source datasets need no change.
 
