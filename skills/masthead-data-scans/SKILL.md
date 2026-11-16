@@ -69,7 +69,7 @@ If the user didn't name a table or a metric, propose candidates instead of askin
 2. Read each shortlisted table with `bq show --format=prettyjson <project>:<dataset>.<table>`. Find its time column — the partition column first (`timePartitioning.field`, or `_PARTITIONTIME` when `timePartitioning` has no field), then a load or event timestamp in `schema.fields`. Skip tables without one: they can't produce one row per period.
 3. Propose 1–3 metrics per table from [Starter metrics](references/table-contract.md#starter-metrics), each with its frequency and why it suits that table. Let the user pick before writing any SQL.
 
-Then agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, and the scan table name (snake_case, for example `orders_daily_volume`). Write the **metric SQL** to the contract above, with one placeholder window on the source's time column: `<time column> >= <from> AND <time column> < <to>`. Read the source by its partition column where possible, so each refresh stays cheap. From it, derive:
+Then agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, the scan description, and the scan table name (snake_case, for example `orders_daily_volume`). Suggest the **description** yourself: one or two plain sentences on what the scan measures, on which table, and what a failure means, for example "Daily share of customers without an email in `crm.customers`; a spike means the signup form stopped sending emails." Show it with the plan and let the user edit it: the Masthead app shows it on the scan page. Write the **metric SQL** to the contract above, with one placeholder window on the source's time column: `<time column> >= <from> AND <time column> < <to>`. Read the source by its partition column where possible, so each refresh stays cheap. From it, derive:
 
 * **History SQL**: the window is the last 30 closed periods, for the initial table.
 * **Refresh SQL**: a `MERGE` of the last 3 closed periods into the table, from the template in [references/table-contract.md](references/table-contract.md). Recomputing 3 periods every run fills in late source data and recovers from a missed run.
@@ -160,7 +160,7 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
 ### Step 4: Masthead-side dry run
 
-Call `create_data_scan` with `table` (`<project>.masthead_dq.<table_name>`), `name`, `frequency`, optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
+Call `create_data_scan` with `table` (`<project>.masthead_dq.<table_name>`), `name`, `description`, `frequency`, optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
 
 | The error says | Fix |
 | --- | --- |
@@ -180,6 +180,7 @@ After the user's yes, call `create_data_scan` with the same arguments and `dryRu
 * `update_data_scan` and `delete_data_scan` take the scan's `scanId` — the `id` from `list_data_scans`.
 * Pause or resume: `update_data_scan` with `active` set to `false` or `true`. A paused scan doesn't stop the scheduled refresh.
 * Processing delay: `update_data_scan` with `processDelayHours`.
+* Description: `update_data_scan` with `description`; an empty string clears it. Suggest a new one when the metric changes.
 * Metric logic: change the refresh SQL of the scheduled query (`bq update --transfer_config --params='{"query":"…"}' <transfer config name>`). The scan keeps its stored history, so old and new values mix in one series; to avoid that, create a new scan table and point the scan at it.
 * Table or frequency: `update_data_scan` with `table` or `frequency` **deletes the scan's history and incidents** and analyzes it again from scratch; warn first. A new frequency also needs a new refresh schedule.
 * Delete: `delete_data_scan`, one scan per confirmation. It removes the scan's results and open incidents; the scan table and the scheduled query stay. Offer to remove them too (`bq rm --transfer_config <transfer config name>`, then `DROP TABLE`), each with its own yes.
