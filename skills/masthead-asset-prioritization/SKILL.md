@@ -65,7 +65,7 @@ Never suggest a tier for a MUTED asset.
 
 ### Step 3: Enrichment (top 5 only, `TABLE` rows only)
 
-For the five highest-scoring raise candidates and the five lowest-scoring lower candidates **among `TABLE` rows**, call `get_table_lineage` (name the downstream tables and dashboards) and `get_table_pipelines` (name the writer and its technology). Add one clause to the reason. These tools take a table identity and have no BI-asset equivalent — skip enrichment for BI-asset rows entirely, and skip it beyond the top 5 per side to keep tool calls low.
+For the five highest-scoring raise candidates and the five lowest-scoring lower candidates **among `TABLE` rows**, call `get_table_lineage` with `direction = "DOWNSTREAM"` (name the most recently active downstream tables and dashboards, and give `value.pages.downstream.total` as the full count) and `get_table_pipelines` (name the writer and its technology). Add one clause to the reason. These tools take a table identity and have no BI-asset equivalent — skip enrichment for BI-asset rows entirely, and skip it beyond the top 5 per side to keep tool calls low.
 
 ### Step 4: Report
 
