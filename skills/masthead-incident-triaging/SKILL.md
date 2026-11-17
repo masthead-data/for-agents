@@ -117,9 +117,9 @@ Read direction carefully: `get_table_pipelines` returns the **writer**; pipeline
 Trace downstream tables and pipelines to assess blast radius.
 
 * **Tool**: `get_table_lineage`
-* **Key Arguments**: `project`, `dataset`, `table`
+* **Key Arguments**: `project`, `dataset`, `table`; for blast radius, `direction = "DOWNSTREAM"`. Optional: `nodeTypes` (e.g. `["LOOKER", "LOOKER_STUDIO_REPORT"]` for affected dashboards and reports only), `limit` (default 25, at most 200), `offset`
 * **Example Prompt**: *"Show the lineage for table your-project-id.your_dataset.another_table to find downstream tables."*
-* **Response Reading**: The tool returns a `ValueResponse`. Look for nodes in the `value.nodes` array where `positionType` is `DOWNSTREAM` and inspect their `info` (e.g., `value.nodes[].info.alertType`).
+* **Response Reading**: The tool returns a `ValueResponse`. Look for nodes in the `value.nodes` array where `positionType` is `DOWNSTREAM` and inspect their `info` (e.g., `value.nodes[].info.alertType`). Each direction is paged, most recently active neighbours first: `value.pages.downstream.total` is the full count. Report that count; when `nextOffset` is not null, call again with `offset = nextOffset` only if the remaining neighbours change the assessment, and say when the list you report is partial.
 
 ---
 
