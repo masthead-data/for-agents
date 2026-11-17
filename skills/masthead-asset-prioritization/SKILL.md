@@ -12,8 +12,8 @@ Keep monitoring tiers aligned with how much each asset actually matters to the t
 
 ## Operating Modes
 
-* **Recommendation Mode (Default)**: reads scores, lineage and pipelines; produces the review blocks. **No `update_table_priority` or `update_bi_asset_priority` call is made in this mode.**
-* **Action Mode**: applies confirmed tier changes with `update_table_priority` (tables) or `update_bi_asset_priority` (BI assets), one asset at a time, then re-reads to confirm. **Requires the user's explicit sign-off per asset or for a whole listed group.**
+* **Recommendation Mode (Default)**: reads scores, lineage and pipelines; produces the review blocks. **No `bulk_update_table_priority` or `update_bi_asset_priority` call is made in this mode.**
+* **Action Mode**: applies confirmed tier changes with `bulk_update_table_priority` (tables, every table that gets the same tier in one call) or `update_bi_asset_priority` (BI assets, one at a time), then re-reads to confirm. **Requires the user's explicit sign-off per asset or for a whole listed group.**
 
 ## How the score works
 
@@ -79,12 +79,12 @@ Identify each asset as `project.dataset.table` for a `TABLE` row, or `title (url
 
 ### Step 5: Apply (Action Mode only)
 
-Only after the user confirms — per asset, or a whole group such as "all raises" — apply the confirmed tier: `update_table_priority(project, dataset, table, priorityTier)` for `TABLE` rows, `update_bi_asset_priority(assetType, uuid, priorityTier)` for BI-asset rows. `update_bi_asset_priority` returns the changed asset's own score row (matched by `uuid`) and fails if the change was not applied, so its returned `alertType` is the confirmation. For `TABLE` rows, re-read with `list_asset_scores` using the **same `assetTypes = ["TABLE"]` scope as Step 1** (plus `project`/`dataset`) and `alertTiers` set to the *new* tier — the Step 1 filters would otherwise drop the just-changed table out of the result — and match the returned rows by `uuid` to the table just changed: several tables can already sit at the new tier, so a row coming back proves nothing on its own, and a missing `uuid` match means the change is not confirmed and must be reported as such.
+Only after the user confirms — per asset, or a whole group such as "all raises" — apply the confirmed tier. For `TABLE` rows, call `bulk_update_table_priority(tables, priorityTier)` once per target tier with every confirmed table for that tier in `tables` (`[{project, dataset, table}]`, at most 100 per call); it answers one row per table, `{value: {project, dataset, table}, error}`, and a row with `error` set was not changed — report it with its error and do not count it as applied. For BI-asset rows, call `update_bi_asset_priority(assetType, uuid, priorityTier)` per asset; it returns the changed asset's own score row (matched by `uuid`) and fails if the change was not applied, so its returned `alertType` is the confirmation. For `TABLE` rows without an `error`, re-read with `list_asset_scores` using the **same `assetTypes = ["TABLE"]` scope as Step 1** (plus `project`/`dataset`) and `alertTiers` set to the *new* tier — the Step 1 filters would otherwise drop the just-changed table out of the result — and match the returned rows by `uuid` to the tables just changed: several tables can already sit at the new tier, so a row coming back proves nothing on its own, and a missing `uuid` match means the change is not confirmed and must be reported as such.
 
 ## Guardrails
 
 * Never lower a tier, and never change a MUTED asset, without a per-asset yes from the user; "all raises" is a valid group confirmation, "all lowerings" is not.
-* Never call `update_table_priority` or `update_bi_asset_priority` for an asset that was not in the reviewed lists.
+* Never call `bulk_update_table_priority` or `update_bi_asset_priority` for an asset that was not in the reviewed lists.
 * Assets with a score of 0 are outside the tool's scope, so a prioritized asset with no signal at all is not surfaced as a lowering candidate; mention this when the user asks for a full re-tiering pass.
 * End with a numbered list of actionable next steps: the exact tool call or command, the expected effect on alerting, and how to verify it (re-run `list_asset_scores`, check the asset in the Masthead Dictionary).
 

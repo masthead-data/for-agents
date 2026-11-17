@@ -174,9 +174,9 @@ Statuses: `FIXED`, `EXPECTED`, `NO_ACTION_NEEDED` are considered final and shoul
 
 For important data assets, elevate its monitoring tier to `PRIORITY` or `CRITICAL` to reduce the time to detect future incidents. On the other hand, if the data asset is not critical and you want to reduce noise, you can lower its monitoring tier to `REGULAR` or `MUTED`.
 
-* **Tool**: `update_table_priority`
-* **Key Arguments**: `project`, `dataset`, `table`, `priorityTier`
-* **Example Prompt**: *"Set the monitoring priority for table your-project-id.your_dataset.your_table to PRIORITY."*
+* **Tool**: `bulk_update_table_priority`
+* **Key Arguments**: `tables` (`[{project, dataset, table}]`, one or more, at most 100 per call), `priorityTier`. Put every table that gets the same tier in one call. The answer has one row per table; a row with `error` set was not changed.
+* **Example Prompt**: *"Set the monitoring priority for tables your-project-id.your_dataset.orders and your-project-id.your_dataset.customers to PRIORITY."*
 
 ---
 
