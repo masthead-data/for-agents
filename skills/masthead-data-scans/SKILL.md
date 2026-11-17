@@ -32,6 +32,15 @@ Masthead has no read access to the customer's data, so it can't run the metric q
 * Masthead only reads closed periods — the in-progress period (today, for a `DAILY` scan) is never fetched; a period is read on a run after it has closed. `processDelayHours` adds extra wait after that close. **The scheduled refresh must finish within that delay**, or Masthead finds no row for the period and flags it as missing.
 * Data scans are available in the US region only.
 
+## Reading scan results
+
+When the user compares results with the app or with open incidents, explain the difference instead of reporting a conflict:
+
+* `latestResult` (`list_data_scans`, `list_data_scan_tables`) is the newest checked period. A period is checked `processDelayHours` after it closes (after it starts on `MANUAL` scans), so it trails the current date. `lastProcessedDatetime` can be newer: that period is not checked yet and shows `failed` 0. Report results from `latestResult`.
+* `nextProcessingDatetime` is when the next run is due. A run can start a few hours later while other scans are processing.
+* Datetimes are period starts in UTC. Rule charts in the app draw a period at its end, so a `DAILY` period shows at the next day there.
+* Data quality incidents are not closed when the table passes again. An open incident whose `window.start` is older than the scan's `latestResult.datetime` has not failed since; `list_data_scan_tables` shows each table's newest checked result, failing tables first (`search` finds one table).
+
 ## Scan table contract
 
 The scan table has these columns; extra columns are ignored. Examples and the refresh template: [references/table-contract.md](references/table-contract.md).
