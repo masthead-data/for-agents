@@ -89,11 +89,11 @@ One broken pipeline often opens many incidents. Investigate each group once, not
 
 #### 5. Read the Incident Context
 
-Read everything about the incidents you investigate in one call: the details, the newest occurrences with the error and the failing SQL, the pipelines that write to the table with their latest runs, schema changes, analysis events, history and links. A list item already carries the table, tier, pipeline, measurement and error message, so call this only for the incidents you investigate: one or two per group, not every member, and several groups in one call.
+Read everything about an incident you investigate in one call: the details, the newest occurrences with the error and the failing SQL, the pipelines that write to the table with their latest runs, schema changes, analysis events, history and links. A list item already carries the table, tier, pipeline, measurement and error message, so call this only for the incidents you investigate: one or two per group, not every member.
 
 * **Tool**: `get_incident_context`
-* **Key Arguments**: `incidentGroupUuids` (1 to 50 full UUIDs); optional `sections` (`occurrences`, `pipeline`, `schemaChanges`, `analysisEvents`, `history`, `related`; default all) and limits per incident: `occurrenceLimit` (at most 20, default 5), `historyLimit` (at most 100, default 5), `writersLimit` (writers of the table besides the incident's own pipeline, at most 100, default 5) `runsLimit` (runs per writer, at most 100, default 5), `schemaChangesLimit` (default 10), `analysisEventsLimit` (default 10) and `relatedLimit` (default 10). Raise a limit only when you need more: larger values make a bigger response
-* **Result**: `values`, one entry per UUID; an unknown UUID gets `error`. `incident` has the details with `window`, `occurrenceCount`, `relatedCount` and `mute`. A section with nothing in it is missing. `errors` names a section that could not be read: ask again for one that timed out or was unavailable, alone with `sections`; don't retry one marked `rejected`; for `errors.mute`, call again. `truncated` names what was cut. `history` holds the newest `historyLimit` entries; `schemaChanges` (one entry per changed column), `analysisEvents` and `related` hold the newest `schemaChangesLimit`, `analysisEventsLimit` and `relatedLimit`. For one incident only the SQL is cut; with several, the notes, descriptions and errors are cut too and the newest SQL is shorter, so ask for one incident when you need the full text. Cut texts end with `…`; titles are never cut.
+* **Key Arguments**: `incidentGroupUuid` (the full UUID); optional `sections` (`occurrences`, `pipeline`, `schemaChanges`, `analysisEvents`, `history`, `related`; default all) and limits: `occurrenceLimit` (at most 20, default 5), `historyLimit` (at most 100, default 5), `writersLimit` (writers of the table besides the incident's own pipeline, at most 100, default 5), `runsLimit` (runs per writer, at most 100, default 5), `schemaChangesLimit` (default 10), `analysisEventsLimit` (default 10) and `relatedLimit` (default 10). Raise a limit only when you need more: larger values make a bigger response
+* **Result**: `value`; an unknown UUID returns an error. `incident` has the details with `window`, `occurrenceCount`, `relatedCount` and `mute`. A section with nothing in it is missing. `errors` names a section that could not be read: ask again for one that timed out or was unavailable, alone with `sections`; don't retry one marked `rejected`; for `errors.mute`, call again. `truncated` names what was cut. `history` holds the newest `historyLimit` entries; `schemaChanges` (one entry per changed column), `analysisEvents` and `related` hold the newest `schemaChangesLimit`, `analysisEventsLimit` and `relatedLimit`. Only the SQL of the occurrences is cut (it ends with `…`); no other text is.
 * **Reading it**: `occurrences.total` against `incident.createdAt` tells how often it fires; it counts the stored occurrences only, as retention removes old ones. `history` shows who already touched the incident and when its status last changed, so you don't propose what someone already decided. A `schemaChanges` entry just before `createdAt` is a likely cause of a pipeline error or a volume change. An `analysisEvents` entry explains an anomaly that started or stopped because detection itself changed.
 * **Example Prompt**: *"Why did the volume incident on project.dataset.table_id fire, and is it still failing?"*
 * `get_incident_details` returns only the details of one incident; use it when that is all you need.
@@ -101,7 +101,7 @@ Read everything about the incidents you investigate in one call: the details, th
 
 #### 6. Check Existing Links
 
-The `related` section of `get_incident_context` already holds the links of the incidents you read. For another incident, call `get_related_incidents`, only when its `relatedCount` in the list is above 0. If someone already linked an UPSTREAM incident, investigate that one first; a DOWNSTREAM link shows the known impact.
+The `related` section of `get_incident_context` holds the links of the incident you read, the newest `relatedLimit` (10 by default). When `truncated` names `related`, or `incident.relatedCount` is above the number of items, there are more: raise `relatedLimit` or call `get_related_incidents`. For another incident, call `get_related_incidents`, only when its `relatedCount` in the list is above 0. If someone already linked an UPSTREAM incident, investigate that one first; a DOWNSTREAM link shows the known impact.
 
 * **Tool**: `get_related_incidents`
 * **Key Arguments**: `incidentGroupUuid` (string)
@@ -145,7 +145,7 @@ Read direction carefully: the `pipeline` section and `get_table_pipelines` retur
 
 * **Tool**: `get_incident_context` (`sections` = `pipeline` when you already read the rest). `get_table_pipelines` is for a table with no incident, or when you need a writer's sources and cost.
 * **Key Arguments** of `get_table_pipelines`: `project`, `dataset`, `table`; `from` = about a day before the incident's `createdAt` (the default 30-day window is slow on busy tables)
-* **Call Economy**: one `get_incident_context` call covers up to 50 incidents; for a group that shares a table or a `pipeline.jobHash`, read one member.
+* **Call Economy**: one `get_incident_context` call per incident; for a group that shares a table or a `pipeline.jobHash`, read one member.
 * **Example Prompt**: *"Which pipelines write to your-project-id.your_dataset.your_table?"*
 
 #### 3. Trace Downstream Lineage
