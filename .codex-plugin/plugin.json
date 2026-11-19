@@ -1,6 +1,6 @@
 {
   "name": "masthead-agent-tools",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Investigate BigQuery incidents, trace lineage, and identify data-platform cost savings with Masthead.",
   "author": {
     "name": "Masthead Data",
@@ -63,7 +63,7 @@
             {
               "description": "Inspect incident details",
               "prompt": "Show the details and likely cause of this Masthead incident: <reviewer-provided incident ID>.",
-              "tools_triggered": "get_incident_details",
+              "tools_triggered": "get_incident_context",
               "expected_behavior": "Returns the incident details available to the connected user and distinguishes the detected error from a confirmed current root cause."
             },
             {

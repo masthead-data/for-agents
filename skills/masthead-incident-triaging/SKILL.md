@@ -84,21 +84,24 @@ One broken pipeline often opens many incidents. Investigate each group once, not
 * **Same cause candidates**: start with the same `destination.project` + `destination.dataset` (a dataset name can exist in several projects) and incident type (`incidentType` + `anomalyType`), which usually turns hundreds of incidents into a few dozen groups; a `lastDatetime` within the same hour strengthens the group. Then, inside a group or for what is left: the same `measurementData.errorMessage` once ids, dates and table names are ignored (pipeline errors), the same `measurementData.scanName` (scans), the same `pipeline.principalEmail`. `pipeline.jobHash` rarely groups anything, because most incidents have their own pipeline. A group is a hypothesis: confirm it on one or two members before treating the rest alike.
 * **New or recurring**: `from` / `to` filter on when an incident last occurred, not on when it was created. `createdAt` inside the window means a new incident; an older `createdAt` means a known one that fired again. To list only the new ones, pass `createdFrom` to `list_incidents` (with the same `from` / `to`); a summary bucket's `new` is the same count, taken from the `createdFrom` you pass to `summarize_incidents` (default: `from`). Report recurring incidents as a count per group unless their tier is `CRITICAL` or `PRIORITY`.
 * **Already triaged**: on a busy tenant most `CRITICAL` / `PRIORITY` incidents are recurring ones that fire every day. One that already has a `severity` or an `assignee` has been looked at by someone: list it as known in one line (table, severity, since when) and investigate it again only when the user asks or it got worse (more failed rules, a value further outside `min` / `max`). Investigate the recurring ones nobody has triaged once per group, and propose a severity for the group.
-* **Stale**: an open incident whose `lastDatetime` is more than 7 days old has not fired since. `from` defaults to 30 days back, so count them with their own call: `list_incidents` with `statuses` = `OPEN`, `to` = 7 days ago, `from` = a year ago, `limit` = 1, and read `pagination.total` and `extra.filterCounts`. There can be thousands: report the count per tier, and list only a cut the user wants cleaned up (a tier, a project, a dataset). They are cleanup candidates, not investigations: for each group of freshness, volume or pipeline incidents check one writer with `get_table_pipelines` (a `lastActivity` after the incident's `lastDatetime` means the table is written again); for scan incidents use the scan checks in Retrieve Detailed Failure Logs. Then propose `NO_ACTION_NEEDED` for the group in Phase 3, with sign-off.
+* **Stale**: an open incident whose `lastDatetime` is more than 7 days old has not fired since. `from` defaults to 30 days back, so count them with their own call: `list_incidents` with `statuses` = `OPEN`, `to` = 7 days ago, `from` = a year ago, `limit` = 1, and read `pagination.total` and `extra.filterCounts`. There can be thousands: report the count per tier, and list only a cut the user wants cleaned up (a tier, a project, a dataset). They are cleanup candidates, not investigations: for each group of freshness, volume or pipeline incidents check one member's writer with `get_incident_context` and `sections` = `pipeline` (a `lastActivity` after the incident's `lastDatetime` means the table is written again); for scan incidents use the scan checks in Read the Incident Context. Then propose `NO_ACTION_NEEDED` for the group in Phase 3, with sign-off.
 * Keep a working list of the groups with every member's full `groupHash`, so the later updates and links need no second listing.
 
-#### 5. Retrieve Detailed Failure Logs
+#### 5. Read the Incident Context
 
-Use the incident group UUID to retrieve detailed descriptions of the failure, including the failing table, alert type, and raw error messages. A list item already carries the table, tier, pipeline, measurement and error message, so call this only for the incidents you investigate and need `notes`, `mute`, `title` or `dataProducts` for: one or two per group, not every member.
+Read everything about an incident you investigate in one call: the details, the newest occurrences with the error and the failing SQL, the pipelines that write to the table with their latest runs, schema changes, analysis events, history and links. A list item already carries the table, tier, pipeline, measurement and error message, so call this only for the incidents you investigate: one or two per group, not every member.
 
-* **Tool**: `get_incident_details`
-* **Key Arguments**: `incidentGroupUuid` (string)
-* **Example Prompt**: *"Get details for volume incident on table project.dataset.table_id."*
-* **Data scan incidents** (`DATA_QUALITY_QUALITY_CHECK`) stay `OPEN` after the table passes again, so a scan can show few failures next to many open incidents. Before calling one active, compare its `window.start` with the scan's `latestResult.datetime` from `list_data_scans` (`measurementData.scanName` is the scan's name): an older `window.start` means the table has not failed since; tell the user that instead of reporting a current failure. `list_data_scan_tables` with `measurementData.scanId` lists the scan's tables with their newest checked result, failing tables first; `search` = the table name finds one table. Scan results trail the current date and the app's rule charts label a period by its end; the masthead-data-scans skill's "Reading scan results" explains both.
+* **Tool**: `get_incident_context`
+* **Key Arguments**: `incidentGroupUuid` (the full UUID); optional `sections` (`occurrences`, `pipeline`, `schemaChanges`, `analysisEvents`, `history`, `related`; default all) and limits: `occurrenceLimit` (default 5; a pipeline error returns at most 20), `historyLimit` (at most 100, default 5), `writersLimit` (writers of the table besides the incident's own pipeline, at most 100, default 5), `runsLimit` (runs per writer, at most 100, default 5), `schemaChangesLimit` (default 10), `analysisEventsLimit` (default 10) and `relatedLimit` (default 10). Raise a limit only when you need more: larger values make a bigger response
+* **Result**: `value`; an unknown UUID returns an error. `incident` has the details with `window`, `occurrenceCount`, `relatedCount` and `mute`. A section with nothing in it is missing. `errors` names a section that could not be read: ask again for one that timed out or was unavailable, alone with `sections`; don't retry one marked `rejected`; for `errors.mute`, call again. `truncated` names what was cut. `history` holds the newest `historyLimit` entries; `schemaChanges` (one entry per changed column), `analysisEvents` and `related` hold the newest `schemaChangesLimit`, `analysisEventsLimit` and `relatedLimit`. Only the SQL of the occurrences is cut (it ends with `…`), and each occurrence keeps its first 10 `sourceUris`; no other text is cut.
+* **Reading it**: `occurrences.total` against `incident.createdAt` tells how often it fires; it counts the stored occurrences only, as retention removes old ones. `history` shows who already touched the incident and when its status last changed, so you don't propose what someone already decided. A `schemaChanges` entry just before `createdAt` is a likely cause of a pipeline error or a volume change. An `analysisEvents` entry explains an anomaly that started or stopped because detection itself changed.
+* **Example Prompt**: *"Why did the volume incident on project.dataset.table_id fire, and is it still failing?"*
+* For the incident alone (its fields and `mute`), pass `sections` = `["history"]`.
+* **Data scan incidents** (`DATA_QUALITY_QUALITY_CHECK`) stay `OPEN` after the table passes again, so a scan can show few failures next to many open incidents. Before calling one active, compare its `window.start` (on the list item, or `incident.window.start` in the context) with the scan's `latestResult.datetime` from `list_data_scans` (`measurementData.scanName` is the scan's name): an older `window.start` means the table has not failed since; tell the user that instead of reporting a current failure. `list_data_scan_tables` with `measurementData.scanId` lists the scan's tables with their newest checked result, failing tables first; `search` = the table name finds one table. Scan results trail the current date and the app's rule charts label a period by its end; the masthead-data-scans skill's "Reading scan results" explains both.
 
 #### 6. Check Existing Links
 
-Check existing links with `get_related_incidents`, only for incidents whose `relatedCount` in the list is above 0. If someone already linked an UPSTREAM incident, investigate that one first; a DOWNSTREAM link shows the known impact.
+The `related` section of `get_incident_context` holds the links of the incident you read, the newest `relatedLimit` (10 by default). When `truncated` names `related`, or `incident.relatedCount` is above the number of items, there are more: raise `relatedLimit` or call `get_related_incidents`. For another incident, call `get_related_incidents`, only when its `relatedCount` in the list is above 0. If someone already linked an UPSTREAM incident, investigate that one first; a DOWNSTREAM link shows the known impact.
 
 * **Tool**: `get_related_incidents`
 * **Key Arguments**: `incidentGroupUuid` (string)
@@ -130,19 +133,19 @@ Check columns count, table type, and active anomaly statuses.
 
 #### 2. Identify Upstream Writers / Pipelines
 
-Determine what process or pipeline writes to the target table to see if a pipeline rerun or schedule adjustment is necessary.
+Determine what process or pipeline writes to the target table to see if a pipeline rerun or schedule adjustment is necessary. The `pipeline` section of `get_incident_context` has it: the pipeline of the newest occurrence first, then the most recently active writers of the table (`writersTotal` counts them all), each with `lastActivity`, `frequencySec`, `runs` (`createTime`, `durationMs`, `isError`) and `lastError`.
 
-The error text in `get_incident_details` is **history** — it records what failed at detection time, not what is failing now. Before naming a root cause, compare it with the writer's latest run from `get_table_pipelines`:
+The error text of an incident is **history** — it records what failed at detection time, not what is failing now. Before naming a root cause, compare `incident.lastDatetime` with the writer's `runs` and `lastActivity`:
 
 * Writer ran successfully **after** the incident's detection time → the cause is already fixed; the incident is a closing candidate, not an escalation.
 * No run at all since detection → the question is why the pipeline stopped (schedule, disabled action, upstream gate), not why it failed.
 * Writer still failing → the error text is current; proceed with it.
 
-Read direction carefully: `get_table_pipelines` returns the **writer**; pipelines in `get_table_lineage` that read the table are consumers and say nothing about the table's own freshness.
+Read direction carefully: the `pipeline` section and `get_table_pipelines` return the **writer**; pipelines in `get_table_lineage` that read the table are consumers and say nothing about the table's own freshness.
 
-* **Tool**: `get_table_pipelines`
-* **Key Arguments**: `project`, `dataset`, `table`; `from` = about a day before the incident's `createdAt` (the default 30-day window is slow on busy tables)
-* **Call Economy**: call it once per distinct table, and for a group that shares a `pipeline.jobHash` once for the group. Don't repeat a call with a different window unless the first answer left the question open.
+* **Tool**: `get_incident_context` (`sections` = `pipeline` when you already read the rest). `get_table_pipelines` is for a table with no incident, or when you need a writer's sources and cost.
+* **Key Arguments** of `get_table_pipelines`: `project`, `dataset`, `table`; `from` = about a day before the incident's `createdAt` (the default 30-day window is slow on busy tables)
+* **Call Economy**: one `get_incident_context` call per incident; for a group that shares a table or a `pipeline.jobHash`, read one member.
 * **Example Prompt**: *"Which pipelines write to your-project-id.your_dataset.your_table?"*
 
 #### 3. Trace Downstream Lineage
@@ -166,7 +169,7 @@ Most incidents have no severity. Propose one for every incident or group you inv
 | `P4` | A `REGULAR` table with no downstream consumers, or a development or staging project. |
 | `P5` | Expected or informational: a known schedule change, a planned backfill, a one-off. |
 
-* **Inputs**: `destination.alertType` from the incident; downstream counts from `get_table_lineage` (`direction = "DOWNSTREAM"`, and once more with `nodeTypes` for BI assets when the count matters); the table's `percentile` from `list_asset_scores` (`assetTypes` = `["TABLE"]`, scoped by `project` and `dataset`); `dataProducts` from `get_incident_details`.
+* **Inputs**: `destination.alertType` from the incident; downstream counts from `get_table_lineage` (`direction = "DOWNSTREAM"`, and once more with `nodeTypes` for BI assets when the count matters); the table's `percentile` from `list_asset_scores` (`assetTypes` = `["TABLE"]`, scoped by `project` and `dataset`); `dataProducts` from the incident in `get_incident_context`.
 * Between two levels, propose the higher one and say why. A group takes the severity of its most important member.
 * Severity is a change like any other: it is applied in Phase 3, after sign-off.
 
