@@ -36,10 +36,10 @@ Masthead has no read access to the customer's data, so it can't run the metric q
 
 When the user compares results with the app or with open incidents, explain the difference instead of reporting a conflict:
 
-* `latestResult` (`list_data_scans`, `list_data_scan_tables`) is the newest checked period. A period is checked `processDelayHours` after it closes (after it starts on `MANUAL` scans), so it trails the current date. `lastProcessedDatetime` can be newer: that period is not checked yet and shows `failed` 0. Report results from `latestResult`.
+* `latestScanResult` (`list_data_scans`, `list_data_scan_tables`) is the newest checked period: `periodStart`, `periodEnd`, `rulesChecked`, and `rulesFailed`. A period is checked `processDelayHours` after it closes (after it starts on `MANUAL` scans), so it trails the current date. `lastProcessedDatetime` can be newer than `latestScanResult.periodStart`: that period is not checked yet and shows `rulesFailed` 0. Report results from `latestScanResult`.
 * `nextProcessingDatetime` is when the next run is due. A run can start a few hours later while other scans are processing.
-* Datetimes are period starts in UTC. Rule charts in the app draw a period at its end, so a `DAILY` period shows at the next day there.
-* Data quality incidents are not closed when the table passes again. An open incident whose `window.start` is older than the scan's `latestResult.datetime` has not failed since; `list_data_scan_tables` shows each table's newest checked result, failing tables first (`search` finds one table).
+* `periodStart` and `periodEnd` bound the period in UTC. Rule charts in the app draw a period at its `periodEnd`, so a `DAILY` period shows at the next day there.
+* Data quality incidents are not closed when the table passes again. An open incident whose `window.start` is older than the scan's `latestScanResult.periodStart` has not failed since; `list_data_scan_tables` shows each table (`table`, as `project.dataset.table`) with its newest checked result, failing tables first (`search` finds one table).
 
 ## Scan table contract
 
@@ -213,6 +213,6 @@ After the user's yes, call `create_data_scan` with the same arguments and `dryRu
 
 ## Documentation
 
-* [Data scans](https://docs.mastheadata.com/governance/data-quality-scans#custom-data-scans)
+* [Data scans](https://docs.mastheadata.com/governance/data-quality-scans#masthead-data-scans)
 * [MCP tools reference](https://docs.mastheadata.com/developer/mcp/tools)
 * [BigQuery scheduled queries](https://cloud.google.com/bigquery/docs/scheduling-queries)
