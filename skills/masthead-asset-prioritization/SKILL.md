@@ -63,9 +63,12 @@ For each **lower** candidate: suggest **REGULAR**, reason from `metrics` in the 
 
 Never suggest a tier for a MUTED asset.
 
-### Step 3: Enrichment (top 5 only, `TABLE` rows only)
+### Step 3: Enrichment (top 5 per side only)
 
-For the five highest-scoring raise candidates and the five lowest-scoring lower candidates **among `TABLE` rows**, call `get_table_lineage` with `direction = "DOWNSTREAM"` (name the most recently active downstream tables and dashboards, and give `value.pages.downstream.total` as the full count) and `get_table_pipelines` (name the writer and its technology). Add one clause to the reason. These tools take a table identity and have no BI-asset equivalent — skip enrichment for BI-asset rows entirely, and skip it beyond the top 5 per side to keep tool calls low.
+For the five highest-scoring raise candidates and the five lowest-scoring lower candidates of each asset type, add one clause to the reason. Skip enrichment beyond the top 5 per side to keep tool calls low.
+
+* **`TABLE` rows**: call `get_table_lineage` with `direction = "DOWNSTREAM"` (name the most recently active downstream tables and dashboards, and give `value.pages.downstream.total` as the full count) and `get_table_pipelines` (name the writer and its technology).
+* **BI-asset rows**: call `get_lineage` with the row's `uuid`, `type` = its `assetType`, `direction = "UPSTREAM"` and `nodeTypes = ["TABLE"]`. Name the most recently active source tables and give `value.pages.upstream.total` as the full count. A BI asset whose source tables are `CRITICAL` or `PRIORITY` supports a raise; one with no source tables in the window supports a lower.
 
 ### Step 4: Report
 
