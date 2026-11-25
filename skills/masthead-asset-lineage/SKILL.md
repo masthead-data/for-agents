@@ -62,6 +62,8 @@ Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `t
 | older | pass `from`, a day before `lastLineageAt`. `from` alone reads up to now; add `to` only to cut the window short. Tell the user the asset's last activity date |
 | null | the asset has no lineage in Masthead. Don't call `get_lineage`; say that no job read or wrote it in a connected project |
 
+To check a specific period for several assets at once, pass `from` (and `to` if needed) to `search_assets`: the same assets come back, and `lastLineageAt` is then the latest edge inside that window, null when there is none. Leave them out for the first search, so an asset last active long ago still shows when.
+
 `lineageType` null (datasets, Looker Studio data sources) means the asset is not a lineage node: there is nothing to trace from it. For a dataset, search its tables instead: `search_assets` with `query` = `project.dataset.` and `types = ["TABLE"]`.
 
 ### Step 4: Trace with `get_lineage`
