@@ -1,6 +1,6 @@
 ---
 name: masthead-asset-lineage
-description: Find any asset Masthead knows — a BigQuery table, dataset or routine, a Looker dashboard, look or explore, a Looker Studio report, a Google Sheet, a Power BI report — from a URL, part of a name or an id, then trace its upstream sources and downstream consumers, using the Masthead MCP server tools `find_assets` and `get_lineage`.
+description: Find any asset Masthead knows — a BigQuery table, dataset or routine, a Looker dashboard, look or explore, a Looker Studio report, a Google Sheet, a Power BI report — from a URL, part of a name or an id, then trace its upstream sources and downstream consumers, using the Masthead MCP server tools `search_assets` and `get_lineage`.
 compatibility: Requires connection to the Masthead MCP server at `https://mcp.mastheadata.com/mcp`.
 ---
 
@@ -8,7 +8,7 @@ compatibility: Requires connection to the Masthead MCP server at `https://mcp.ma
 
 ## Purpose
 
-Users start from what they have: a dashboard URL, a sheet link, part of a table name. Every other Masthead tool needs a Masthead `uuid` or an exact `project.dataset.table`. This skill gets from one to the other with `find_assets`, then reads lineage with `get_lineage`: the tables a dashboard reads, the dashboards and tables that depend on a table, and the path between them.
+Users start from what they have: a dashboard URL, a sheet link, part of a table name. Every other Masthead tool needs a Masthead `uuid` or an exact `project.dataset.table`. This skill gets from one to the other with `search_assets`, then reads lineage with `get_lineage`: the tables a dashboard reads, the dashboards and tables that depend on a table, and the path between them.
 
 The skill is read-only. It never changes an asset.
 
@@ -21,7 +21,7 @@ The skill is read-only. It never changes an asset.
 
 ### Step 1: Find the asset
 
-Call `find_assets` with what the user gave you, unchanged. Don't strip a URL down to its id or guess a full table path: the server parses the input.
+Call `search_assets` with what the user gave you, unchanged. Don't strip a URL down to its id or guess a full table path: the server parses the input.
 
 | The user gives | Pass as `query` | Notes |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `t
 
 ### Step 3: Choose the lineage window
 
-`get_lineage` reads only the **last 7 days** unless you pass a window. `lastLineageAt` from `find_assets` tells you whether that is enough:
+`get_lineage` reads only the **last 7 days** unless you pass a window. `lastLineageAt` from `search_assets` tells you whether that is enough:
 
 | `lastLineageAt` | What to do |
 | --- | --- |
@@ -58,7 +58,7 @@ Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `t
 | older | pass **both** `from` and `to`: `from` a day before `lastLineageAt`, `to` = now. A lone `from` is ignored. Tell the user the asset's last activity date |
 | null | the asset has no lineage in Masthead. Don't call `get_lineage`; say that no job read or wrote it in a connected project |
 
-`lineageType` null (datasets, Looker Studio data sources) means the asset is not a lineage node: there is nothing to trace from it. For a dataset, search its tables instead: `find_assets` with `query` = `project.dataset.` and `types = ["TABLE"]`.
+`lineageType` null (datasets, Looker Studio data sources) means the asset is not a lineage node: there is nothing to trace from it. For a dataset, search its tables instead: `search_assets` with `query` = `project.dataset.` and `types = ["TABLE"]`.
 
 ### Step 4: Trace with `get_lineage`
 
@@ -76,7 +76,7 @@ Reading the response:
 * Neighbours are in `value.nodes`, each with `uuid`, `nodeType`, `positionType` (`UPSTREAM` or `DOWNSTREAM`) and `info` (name, tier).
 * `value.pages.upstream.total` and `value.pages.downstream.total` are the full counts; always report them. Each direction returns the 100 most recently active neighbours. When `nextOffset` is not null and the rest matters, call again with that `direction` and `offset = nextOffset`; otherwise say the list is partial.
 * **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` and `to` on every hop. Go at most as deep as the question needs, and say how many hops you read.
-* **A node with `info: null`** is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `find_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
+* **A node with `info: null`** is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `search_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
 
 ### Step 5: Report
 
@@ -89,24 +89,24 @@ Reading the response:
 
 **"Which tables feed this dashboard? `https://lookerstudio.google.com/reporting/<id>/page/abc`"**
 
-1. `find_assets(query = "<the URL>")` → one `LOOKER_STUDIO_REPORT` row; note `uuid`, `lineageType`, `lastLineageAt`.
+1. `search_assets(query = "<the URL>")` → one `LOOKER_STUDIO_REPORT` row; note `uuid`, `lineageType`, `lastLineageAt`.
 2. `lastLineageAt` is a month old → `get_lineage(uuid, type = "LOOKER_STUDIO_REPORT", direction = "UPSTREAM", nodeTypes = ["TABLE"], from = <a day before lastLineageAt>, to = <now>)`.
 3. Report the source tables, `value.pages.upstream.total`, and that the report was last active a month ago.
 
 **"What breaks if `orders_daily` is late?"**
 
-1. `find_assets(query = "orders_daily", types = ["TABLE"])` → three rows; ask which one, or take the exact match.
+1. `search_assets(query = "orders_daily", types = ["TABLE"])` → three rows; ask which one, or take the exact match.
 2. `get_lineage(uuid, type = "TABLE", direction = "DOWNSTREAM")` → downstream tables and BI assets, with the total.
 3. For each downstream table that matters, one more hop with its `uuid` and `nodeType`.
 
 ## Guardrails
 
-* Read-only: this skill calls `find_assets`, `get_lineage` and `list_projects` only.
+* Read-only: this skill calls `search_assets`, `get_lineage` and `list_projects` only.
 * Never report "not tracked" from an empty `get_lineage` alone. Check `lastLineageAt` first: an empty result inside a 7-day window is common for a report opened monthly.
-* Never pass an id from a URL as `uuid` to `get_lineage`. The id in a Looker Studio or Sheets URL is not the Masthead `uuid`; `find_assets` returns the right one.
+* Never pass an id from a URL as `uuid` to `get_lineage`. The id in a Looker Studio or Sheets URL is not the Masthead `uuid`; `search_assets` returns the right one.
 * To find a table's writers, run history or cost, use `get_table_pipelines`; for open incidents on the assets you found, use the `masthead-incident-triaging` skill.
 
 ## Documentation
 
-* [MCP tools reference: `find_assets`](https://docs.mastheadata.com/developer/mcp/tools#find_assets)
+* [MCP tools reference: `search_assets`](https://docs.mastheadata.com/developer/mcp/tools#search_assets)
 * [MCP tools reference: `get_lineage`](https://docs.mastheadata.com/developer/mcp/tools#get_lineage)
