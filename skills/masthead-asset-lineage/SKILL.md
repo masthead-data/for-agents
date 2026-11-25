@@ -91,6 +91,7 @@ Reading the response:
   | `OUTSIDE_REQUEST` | lineage exists, none in this window or filter | `error` gives the last lineage time: pass `from`, a time before it, or drop `direction` / `nodeTypes` |
   | `NO_METADATA` | lineage refers to the uuid, Masthead has no metadata | report it as an unnamed table: project not connected, deleted, or not collected yet |
 
+* **Pipelines between assets**: lineage shows the pipeline that connects two assets, with its uuid. To learn what it is, call `get_pipeline_context` with that uuid: who runs it, its SQL, whether it runs on schedule (`runs.total` against `runs.expected`), its last error, cost, and open incidents. Use it when the user asks why a table changed or stopped updating, not for every edge.
 * **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` (and `to`, if you set one) on every hop. Go at most as deep as the question needs, and say how many hops you read.
 * **A node with `info: null`** is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `search_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
 
@@ -117,7 +118,7 @@ Reading the response:
 
 ## Guardrails
 
-* Read-only: this skill calls `search_assets`, `get_lineage` and `list_projects` only.
+* Read-only: this skill calls `search_assets`, `get_lineage`, `get_pipeline_context` and `list_projects` only.
 * Never report "not tracked" from an empty `get_lineage` alone. Read its `code`: only `NOT_FOUND` and `NO_LINEAGE` mean that, and `OUTSIDE_REQUEST` is common for a report opened monthly.
 * Never pass an id from a URL as `uuid` to `get_lineage`. The id in a Looker Studio or Sheets URL is not the Masthead `uuid`; `search_assets` returns the right one.
 * To find a table's writers, run history or cost, use `get_table_pipelines`; for open incidents on the assets you found, use the `masthead-incident-triaging` skill.
