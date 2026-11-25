@@ -75,6 +75,16 @@ Reading the response:
 
 * Neighbours are in `value.nodes`, each with `uuid`, `nodeType`, `positionType` (`UPSTREAM` or `DOWNSTREAM`) and `info` (name, tier).
 * `value.pages.upstream.total` and `value.pages.downstream.total` are the full counts; always report them. Each direction returns the 100 most recently active neighbours. When `nextOffset` is not null and the rest matters, call again with that `direction` and `offset = nextOffset`; otherwise say the list is partial.
+* **No neighbours**: read `code` and `error` before concluding anything. `get_lineage` always returns the node you asked for, so an empty response alone proves nothing.
+
+  | `code` | What it means | What to do |
+  | --- | --- | --- |
+  | `NOT_FOUND` | no asset has this uuid | you passed an id that is not a Masthead `uuid`: go back to Step 1 |
+  | `WRONG_TYPE` | the uuid is another asset type | call again with the `type` that `error` names |
+  | `NO_LINEAGE` | the asset exists, never had lineage | report that; there is nothing to trace |
+  | `OUTSIDE_REQUEST` | lineage exists, none in this window or filter | `error` gives the last lineage time: pass both `from` and `to` around it, or drop `direction` / `nodeTypes` |
+  | `NO_METADATA` | lineage refers to the uuid, Masthead has no metadata | report it as an unnamed table: project not connected, deleted, or not collected yet |
+
 * **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` and `to` on every hop. Go at most as deep as the question needs, and say how many hops you read.
 * **A node with `info: null`** is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `search_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
 
@@ -102,7 +112,7 @@ Reading the response:
 ## Guardrails
 
 * Read-only: this skill calls `search_assets`, `get_lineage` and `list_projects` only.
-* Never report "not tracked" from an empty `get_lineage` alone. Check `lastLineageAt` first: an empty result inside a 7-day window is common for a report opened monthly.
+* Never report "not tracked" from an empty `get_lineage` alone. Read its `code`: only `NOT_FOUND` and `NO_LINEAGE` mean that, and `OUTSIDE_REQUEST` is common for a report opened monthly.
 * Never pass an id from a URL as `uuid` to `get_lineage`. The id in a Looker Studio or Sheets URL is not the Masthead `uuid`; `search_assets` returns the right one.
 * To find a table's writers, run history or cost, use `get_table_pipelines`; for open incidents on the assets you found, use the `masthead-incident-triaging` skill.
 
