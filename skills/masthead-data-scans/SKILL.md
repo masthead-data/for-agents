@@ -8,7 +8,7 @@ compatibility: Requires the Masthead MCP server at `https://mcp.mastheadata.com/
 
 ## Purpose
 
-Add a data quality scan to Masthead end to end. The user describes a metric; the skill turns it into a query that follows Masthead's contract, materializes the results in a table in a dedicated `masthead_dq` dataset in the user's project, schedules a query that adds each closed period to that table, gives Masthead read access to that dataset only, and creates the scan through the Masthead MCP server. Masthead then reads the table on a schedule, learns the expected range of every metric, and raises a data quality incident when a value falls outside it. Masthead never reads the source tables. The skill also lists, pauses, updates, and deletes existing scans.
+Add a data quality scan to Masthead end to end. The user describes a metric; the skill turns it into a query that follows Masthead's contract, materializes the results in a table in a dedicated `masthead_dq` dataset in the user's project, schedules a query that adds each closed period to that table, gives Masthead read access to that dataset only, and creates the scan through the Masthead MCP server. Masthead then reads the table on a schedule, learns the expected range of every metric (or, for an "Analysis with threshold" scan, takes the limits from each row), and raises a data quality incident when a value falls outside it. Masthead never reads the source tables. The skill also lists, pauses, updates, and deletes existing scans.
 
 ## Who runs what
 
@@ -60,6 +60,24 @@ The scan table has these columns; extra columns are ignored. Examples and the re
 * At most 1,000 series per scan.
 * Partition the table by `timestamp` (day) and cluster by `table_reference, rule_name`, so Masthead's reads stay cheap.
 
+### Scan type
+
+`create_data_scan` takes `type`, shown in the Masthead app as **Type**. It is set at creation and can't change later; to switch, delete the scan and create it again.
+
+* `ANALYSIS`, **Analysis** (default): Masthead learns each metric's normal range from its history. Use it when the user wants to know when a metric behaves unusually.
+* `ANALYSIS_WITH_THRESHOLD`, **Analysis with threshold**: each row carries its own limits, and a value outside them is an incident. Use it when the user states a fixed rule, such as "at most 3% NULLs" or "no duplicate keys". The table needs two more columns:
+
+| Column | Type | Rule |
+| --- | --- | --- |
+| `lower_threshold` | `INT64`, `FLOAT64`, `NUMERIC`, `BIGNUMERIC` | Lowest allowed value; NULL = no lower limit |
+| `upper_threshold` | `INT64`, `FLOAT64`, `NUMERIC`, `BIGNUMERIC` | Highest allowed value; NULL = no upper limit |
+
+* A value equal to a limit passes. Write the limit in the same unit as `value`, so a percent metric gets a percent limit (`3.0`, not `0.03`).
+* For an upper limit only, write `CAST(NULL AS FLOAT64) AS lower_threshold`; a bare `NULL` gets the type `INT64` in a `CREATE TABLE AS SELECT` and then fails for a limit like `0.5`.
+* A row with both limits NULL is checked only for arriving; the dry run warns about such rows.
+* The NULL rule of the contract applies to the four columns above, not to the limits.
+* There is no model, so the 14 days of history aren't needed for the analysis itself, but the dry run still needs rows in the last 14 days.
+
 ## Workflow
 
 ### Step 0: Preconditions
@@ -78,7 +96,7 @@ If the user didn't name a table or a metric, propose candidates instead of askin
 2. Read each shortlisted table with `bq show --format=prettyjson <project>:<dataset>.<table>`. Find its time column — the partition column first (`timePartitioning.field`, or `_PARTITIONTIME` when `timePartitioning` has no field), then a load or event timestamp in `schema.fields`. Skip tables without one: they can't produce one row per period.
 3. Propose 1–3 metrics per table from [Starter metrics](references/table-contract.md#starter-metrics), each with its frequency and why it suits that table. Let the user pick before writing any SQL.
 
-Then agree with the user on: the monitored table or tables, the metric or metrics, the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, the scan description, and the scan table name (snake_case, for example `orders_daily_volume`). Suggest the **description** yourself: one or two plain sentences on what the scan measures, on which table, and what a failure means, for example "Daily share of customers without an email in `crm.customers`; a spike means the signup form stopped sending emails." Show it with the plan and let the user edit it: the Masthead app shows it on the scan page. Write the **metric SQL** to the contract above, with one placeholder window on the source's time column: `<time column> >= <from> AND <time column> < <to>`. Read the source by its partition column where possible, so each refresh stays cheap. From it, derive:
+Then agree with the user on: the monitored table or tables, the metric or metrics, the [scan type](#scan-type) (Analysis, or Analysis with threshold with the limits when the user states a fixed rule), the frequency (`HOURLY`, `EVERY_6_HOURS`, `EVERY_12_HOURS`, `DAILY`), the scan name, the scan description, and the scan table name (snake_case, for example `orders_daily_volume`). Suggest the **description** yourself: one or two plain sentences on what the scan measures, on which table, and what a failure means, for example "Daily share of customers without an email in `crm.customers`; a spike means the signup form stopped sending emails." Show it with the plan and let the user edit it: the Masthead app shows it on the scan page. Write the **metric SQL** to the contract above, with one placeholder window on the source's time column: `<time column> >= <from> AND <time column> < <to>`. Read the source by its partition column where possible, so each refresh stays cheap. From it, derive:
 
 * **History SQL**: the window is the last 30 closed periods, for the initial table.
 * **Refresh SQL**: a `MERGE` of the last 3 closed periods into the table, from the template in [references/table-contract.md](references/table-contract.md). Recomputing 3 periods every run fills in late source data and recovers from a missed run.
@@ -169,12 +187,13 @@ Show the whole plan first, then apply one step at a time after the user's yes. O
 
 ### Step 4: Masthead-side dry run
 
-Call `create_data_scan` with `table` (`<project>.masthead_dq.<table_name>`), `name`, `description`, `frequency`, optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
+Call `create_data_scan` with `table` (`<project>.masthead_dq.<table_name>`), `name`, `description`, `frequency`, `type` for an Analysis with threshold scan (`ANALYSIS_WITH_THRESHOLD`; leave it out for Analysis), optional `processDelayHours`, and `dryRun=true`. Show the summary: rows, tables, metrics, series, time range, bytes processed, warnings. Map an error to its fix:
 
 | The error says | Fix |
 | --- | --- |
 | Masthead cannot read the table | The Step 3.4 grant is missing |
-| missing column or wrong type | Fix the history SQL and the refresh SQL to the contract, and recreate the table |
+| missing column or wrong type | Fix the history SQL and the refresh SQL to the contract, and recreate the table. For an Analysis with threshold scan this includes `lower_threshold` and `upper_threshold` |
+| warning: rows with neither `lower_threshold` nor `upper_threshold` | Fill in the missing limits, or confirm with the user that those metrics only need to arrive |
 | no rows, NULLs, or a malformed `table_reference` | Fix the SQL and rerun Step 2 |
 | the project is not connected to Masthead | Use a project from `list_projects` |
 | a scan with that name already exists | Pick another name, or manage the existing scan |
