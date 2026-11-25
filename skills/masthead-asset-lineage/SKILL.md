@@ -39,7 +39,7 @@ Looker Studio reports, Looker Studio data sources and Google Sheets have **no ti
 
 ### Step 2: Read the result
 
-Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `tableType`, `lineageType`, `lastLineageAt`, `deleted` and `hidden`.
+Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `tableType`, `lineageType`, `lastLineageAt`, `projectConnected`, `sourceProjects`, `deleted` and `hidden`.
 
 * **One row**: use it.
 * **Several rows**: results are ordered exact match, then name starting with the query, then name containing it, then a match only in the id or URL. Take an exact match when there is one. Otherwise show the user the top rows (`type`, `name`, `tier`) and ask which one they mean. Don't pick one silently.
@@ -48,6 +48,8 @@ Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `t
   * a BI asset is known only after a BigQuery job labeled with its id ran in a connected project (`list_projects` shows the connected projects); a report nobody opened recently, or one that reads an unconnected project, is not known;
   * a table is known only when its project is connected.
 * **An error is not an empty result.** A timeout or a `503` says nothing about the asset: retry once, then report the error.
+* **`sourceProjects`** (BI assets): the projects of the tables the asset reads. Compare it with `list_projects`: a project in the list that is not connected is a source Masthead can't see, so `get_lineage` will show those tables without names, or not at all. Say which projects those are.
+* **`projectConnected` is false** (tables, datasets, routines): the project was disconnected from Masthead. The asset's metadata and lineage are stale; say so.
 * **`deleted` or `hidden` is true**: the table existed and is gone, or is a temporary table. Say so before reading its lineage.
 
 ### Step 3: Choose the lineage window
