@@ -33,6 +33,8 @@ Call `search_assets` with what the user gave you, unchanged. Don't strip a URL d
 
 Narrow a fragment search with `types` when the user names the kind of asset, for example `["TABLE"]` or `["LOOKER_DASHBOARD", "LOOKER_LOOK"]`. Values: `TABLE`, `DATASET`, `ROUTINE`, `LOOKER_DASHBOARD`, `LOOKER_LOOK`, `LOOKER_EXPLORE`, `LOOKER_STUDIO_REPORT`, `LOOKER_STUDIO_DATASOURCE`, `GOOGLE_SPREADSHEET`, `POWERBI_REPORT`, `URI`, `SERVICE_ACCOUNT`.
 
+Narrow to one BigQuery project with `project` (an id from `list_projects`) when the user names one or a fragment returns too much. For a table, dataset or routine it means "in this project". A BI asset has no project of its own: there it means "reads tables in this project", so say it that way in your answer. URIs and service accounts are left out when `project` is set.
+
 Looker Studio reports, Looker Studio data sources and Google Sheets have **no title** in Masthead: Masthead never reads the report itself, so their `name` is the id. Find them by URL or id. If the user only knows a report's title, ask for its URL.
 
 ### Step 2: Read the result
