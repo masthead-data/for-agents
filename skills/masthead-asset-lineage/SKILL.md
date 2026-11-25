@@ -39,7 +39,7 @@ Looker Studio reports, Looker Studio data sources and Google Sheets have **no ti
 
 ### Step 2: Read the result
 
-Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `tableType`, `lineageType`, `lastLineageAt`, `projectConnected`, `sourceProjects`, `deleted` and `hidden`.
+Each row in `values` is an asset, the same shape `get_pipeline_context` uses for sources and destinations. It always has `type`, `uuid` and `name`. Then come the fields of its kind: `project`, `dataset`, `table` and `tableType` for a table; `lookerId`, `title` and `url` for a Looker dashboard or look; `reportId` and `url` for a Looker Studio report; `docId` and `url` for a Google Sheet; `uri` for a URI. Then `lineageType`, `tier`, `lastLineageAt`, `projectConnected`, `sourceProjects`, `deleted` and `hidden`, each only where it applies. A field with no value is left out, so treat a missing field as "none".
 
 * **One row**: use it.
 * **Several rows**: results are ordered exact match, then name starting with the query, then name containing it, then a match only in the id or URL. Take an exact match when there is one. Otherwise show the user the top rows (`type`, `name`, `tier`) and ask which one they mean. Don't pick one silently.
@@ -60,11 +60,11 @@ Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `t
 | --- | --- |
 | within the last 7 days | call `get_lineage` with no window |
 | older | pass `from`, a day before `lastLineageAt`. `from` alone reads up to now; add `to` only to cut the window short. Tell the user the asset's last activity date |
-| null | the asset has no lineage in Masthead. Don't call `get_lineage`; say that no job read or wrote it in a connected project |
+| missing | the asset has no lineage in Masthead. Don't call `get_lineage`; say that no job read or wrote it in a connected project |
 
-To check a specific period for several assets at once, pass `from` (and `to` if needed) to `search_assets`: the same assets come back, and `lastLineageAt` is then the latest edge inside that window, null when there is none. Leave them out for the first search, so an asset last active long ago still shows when.
+To check a specific period for several assets at once, pass `from` (and `to` if needed) to `search_assets`: the same assets come back, and `lastLineageAt` is then the latest edge inside that window, missing when there is none. Leave them out for the first search, so an asset last active long ago still shows when.
 
-`lineageType` null (datasets, Looker Studio data sources) means the asset is not a lineage node: there is nothing to trace from it. For a dataset, search its tables instead: `search_assets` with `query` = `project.dataset.` and `types = ["TABLE"]`.
+No `lineageType` (datasets, Looker Studio data sources) means the asset is not a lineage node: there is nothing to trace from it. For a dataset, search its tables instead: `search_assets` with `query` = `project.dataset.` and `types = ["TABLE"]`.
 
 ### Step 4: Trace with `get_lineage`
 
