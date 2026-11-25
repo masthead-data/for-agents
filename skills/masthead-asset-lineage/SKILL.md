@@ -59,7 +59,7 @@ Each row in `values` has `uuid`, `type`, `name`, `externalId`, `url`, `tier`, `t
 | `lastLineageAt` | What to do |
 | --- | --- |
 | within the last 7 days | call `get_lineage` with no window |
-| older | pass **both** `from` and `to`: `from` a day before `lastLineageAt`, `to` = now. A lone `from` is ignored. Tell the user the asset's last activity date |
+| older | pass `from`, a day before `lastLineageAt`. `from` alone reads up to now; add `to` only to cut the window short. Tell the user the asset's last activity date |
 | null | the asset has no lineage in Masthead. Don't call `get_lineage`; say that no job read or wrote it in a connected project |
 
 `lineageType` null (datasets, Looker Studio data sources) means the asset is not a lineage node: there is nothing to trace from it. For a dataset, search its tables instead: `search_assets` with `query` = `project.dataset.` and `types = ["TABLE"]`.
@@ -86,16 +86,16 @@ Reading the response:
   | `NOT_FOUND` | no asset has this uuid | you passed an id that is not a Masthead `uuid`: go back to Step 1 |
   | `WRONG_TYPE` | the uuid is another asset type | call again with the `type` that `error` names |
   | `NO_LINEAGE` | the asset exists, never had lineage | report that; there is nothing to trace |
-  | `OUTSIDE_REQUEST` | lineage exists, none in this window or filter | `error` gives the last lineage time: pass both `from` and `to` around it, or drop `direction` / `nodeTypes` |
+  | `OUTSIDE_REQUEST` | lineage exists, none in this window or filter | `error` gives the last lineage time: pass `from`, a time before it, or drop `direction` / `nodeTypes` |
   | `NO_METADATA` | lineage refers to the uuid, Masthead has no metadata | report it as an unnamed table: project not connected, deleted, or not collected yet |
 
-* **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` and `to` on every hop. Go at most as deep as the question needs, and say how many hops you read.
+* **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` (and `to`, if you set one) on every hop. Go at most as deep as the question needs, and say how many hops you read.
 * **A node with `info: null`** is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `search_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
 
 ### Step 5: Report
 
 * Name each asset the way the user would recognise it: `project.dataset.table` for a table, `name` and `url` for a BI asset (for Looker Studio and Sheets the URL is the name).
-* Give the window you read ("last 7 days", or the `from` and `to` you passed) and the totals per direction.
+* Give the window you read ("last 7 days", or the `from` you passed) and the totals per direction.
 * State the monitoring `tier` of the assets found when it matters to the question (`CRITICAL` and `PRIORITY` first).
 * State only what the tools returned. Masthead lineage is built from observed jobs: no upstream in the window means no job wrote the table in that window, not that the table has no sources.
 
