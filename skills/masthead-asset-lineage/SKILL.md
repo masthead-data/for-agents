@@ -35,7 +35,7 @@ Narrow a fragment search with `types` when the user names the kind of asset, for
 
 Narrow to one BigQuery project with `project` (an id from `list_projects`) when the user names one or a fragment returns too much. For a table, dataset or routine it means "in this project". A BI asset has no project of its own: there it means "reads tables in this project", so say it that way in your answer. URIs and service accounts are left out when `project` is set.
 
-**Listing instead of searching.** Leave `query` out and set filters to list assets by name:
+**Listing instead of searching.** Leave `query` out and set filters to list assets, ordered by project, dataset and name:
 
 | Question | Call |
 | --- | --- |
@@ -44,9 +44,9 @@ Narrow to one BigQuery project with `project` (an id from `list_projects`) when 
 | Which tables are in a dataset? | `types = ["TABLE"]`, `project`, `dataset`; add `tableTypes`, for example `["VIEW"]` |
 | Which Looker Studio reports exist? | `types = ["LOOKER_STUDIO_REPORT"]` |
 | Which dashboards and reports use this table? | `sourceTable = "project.dataset.table"`, `types` set to the BI types |
-| Which assets are on a tier? | `alertTypes = ["CRITICAL", "PRIORITY"]`, with `types` or `project` |
+| Which assets are on a tier? | `alertTypes = ["CRITICAL", "PRIORITY"]`, with `project`, or with `types` that leave out `TABLE` |
 
-Listing tables needs `project` or `sourceTable`; without one the call is rejected. Every filter also narrows a search with a `query`. Page with `extra.nextOffset` as usual, and report `extra.counts` or the page size rather than paging through thousands of rows.
+A listing whose `types` is left out or includes `TABLE` needs `project` or `sourceTable`; without one the call is rejected. Every filter also narrows a search with a `query`. Page with `extra.nextOffset` as usual, and report `extra.counts` or the page size rather than paging through thousands of rows.
 
 Looker Studio reports, Looker Studio data sources and Google Sheets have **no title** in Masthead: Masthead never reads the report itself, so their `name` is the id. Find them by URL or id. If the user only knows a report's title, ask for its URL.
 
@@ -65,7 +65,7 @@ Each row in `values` is an asset, the same shape `get_pipeline_context` uses for
   | `PROJECT_NOT_CONNECTED` | the query is a table path whose project is not connected, or was disconnected | name the project; Masthead knows no tables in it |
   | `NO_METADATA` | lineage refers to the uuid, but Masthead has no metadata for it | `get_lineage` can still read its neighbours with the uuid; don't invent a name |
 
-* **`score` and `percentile`** (tables and scored BI assets): how much the asset matters, 0 to 100 among the tenant's assets of its type. Missing means the asset has no score. Use it to say which of several matches matters most.
+* **`score` and `percentile`** (tables and scored BI assets): `score` is how much the asset matters, and `percentile` is its rank from 0 to 100 among the tenant's assets of its type. Missing means the asset has no score. Use it to say which of several matches matters most.
 * **`sourceTables`** (BI assets): the number of tables the asset read in the window, or in the last 30 days when you pass none. Zero or missing with an old `lastLineageAt` means the asset has not been used lately.
 * **`columns` and `isAnomaly`** (tables): the column count, and whether an incident is open on the table now.
 * **An error is not an empty result.** A timeout or a `503` says nothing about the asset: retry once, then report the error.
@@ -110,9 +110,9 @@ Reading the response:
   | `WRONG_TYPE` | the uuid is another asset type | call again with the `type` that `error` names |
   | `NO_LINEAGE` | the asset exists, never had lineage | report that; there is nothing to trace |
   | `OUTSIDE_REQUEST` | lineage exists, none in this window or filter | `error` gives the last lineage time: pass `from`, a time before it, or drop `direction` / `nodeTypes` |
-  | `NO_METADATA` | lineage refers to the uuid, Masthead has no metadata | report it as an unnamed table: project not connected, deleted, or not collected yet |
+  | `NO_METADATA` | lineage refers to the uuid, Masthead has no metadata | lineage exists but none matched this call: pass `from`, a time before the one in `error`, or drop `direction` / `nodeTypes`. The node itself has no name: report it as an unnamed table (project not connected, deleted, or not collected yet) |
 
-* **Pipelines between assets**: lineage shows the pipeline that connects two assets, with its uuid. To learn what it is, call `get_pipeline_context` with that uuid: who runs it, its SQL, whether it runs on schedule (`runs.total` against `runs.expected`), its last error, cost, and open incidents. Use it when the user asks why a table changed or stopped updating, not for every edge. Its `sources`, `destinations` and `consumers` are assets in the `search_assets` shape, so their `uuid` and `lineageType` go straight to `get_lineage`. When a destination table has `isAnonymous: true` the pipeline is an ad-hoc query that writes no permanent table: report it as a one-off query by its principal, not as a table's writer.
+* **Pipelines between assets**: lineage shows the pipeline that connects two assets, with its uuid. To learn what it is, call `get_pipeline_context` with `pipelineUuid` = that uuid: who runs it, its SQL, whether it runs on schedule (`runs.total` against `runs.expected`), its last error, cost, and open incidents. Use it when the user asks why a table changed or stopped updating, not for every edge. Its `sources`, `destinations` and `consumers` are assets in the `search_assets` shape, so their `uuid` and `lineageType` go straight to `get_lineage`. When a destination table has `isAnonymous: true` the pipeline is an ad-hoc query that writes no permanent table: report it as a one-off query by its principal, not as a table's writer.
 * **Open incidents on the way**: a table or pipeline node whose `asset.isAnomaly` is true has an open incident. Name those nodes first when the question is about impact or a root cause; `list_incidents` has the incidents themselves.
 * **Who queries a BI asset**: call `get_lineage` on the dashboard, report or sheet with `direction = "UPSTREAM"`. Next to the source tables, the response has `PIPELINE` nodes: the BigQuery jobs that ran for the asset. Each one's `asset` has `sourceProject` (the project the jobs run and are billed in), `principalEmail` (the service account or user that ran them) and `pipelineType`. List the distinct projects and principals. `nodeTypes = ["TABLE"]` keeps these pipeline nodes, since it filters the tables, not the pipelines between. This is different from `sourceProjects` in `search_assets`, which names the projects of the tables the asset reads.
 * **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` (and `to`, if you set one) on every hop. Go at most as deep as the question needs, and say how many hops you read.

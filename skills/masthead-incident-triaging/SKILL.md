@@ -149,7 +149,7 @@ Read direction carefully: the `pipeline` section and `get_table_pipelines` retur
 
 * **Tool**: `get_incident_context` (`sections` = `pipeline` when you already read the rest). `get_table_pipelines` is for a table with no incident, or when you need a writer's sources and cost.
 * **Key Arguments** of `get_table_pipelines`: `project`, `dataset`, `table`; `from` = about a day before the incident's `createdAt` (the default 30-day window is slow on busy tables)
-* **One pipeline in depth**: `get_pipeline_context` with a writer's `jobHash` adds what the incident context leaves out: the pipeline's SQL (`fullQuery = true` for all of it), its sources, bytes and slot time per run, cost, the consumers of its table and its other open incidents, what it does to the table (`statementType`: a `MERGE` adds to it, a `CREATE_TABLE_AS_SELECT` rebuilds it), and `jobModel`, the dbt model or Airflow dag and task to open in the repository. Use it for the writer you suspect, not for every writer.
+* **One pipeline in depth**: `get_pipeline_context` with `pipelineUuid` = a writer's `jobHash` adds what the incident context leaves out: the pipeline's SQL (`fullQuery = true` for all of it), its sources, bytes and slot time per run, cost, the consumers of its table and its other open incidents, what it does to the table (`statementType`: a `MERGE` adds to it, a `CREATE_TABLE_AS_SELECT` rebuilds it), and `jobModel`, the dbt model or Airflow dag and task to open in the repository. Use it for the writer you suspect, not for every writer.
 * **Call Economy**: one `get_incident_context` call per incident; for a group that shares a table or a `pipeline.jobHash`, read one member.
 * **Example Prompt**: *"Which pipelines write to your-project-id.your_dataset.your_table?"*
 
