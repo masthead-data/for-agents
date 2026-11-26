@@ -79,7 +79,7 @@ Pass the row's `uuid` as `uuid` and its `lineageType` as `type`. `get_lineage` r
 
 Reading the response:
 
-* Neighbours are in `value.nodes`, each with `uuid`, `nodeType`, `positionType` (`UPSTREAM` or `DOWNSTREAM`) and `info` (name, tier).
+* Neighbours are in `value.nodes`, each with `uuid`, `nodeType`, `positionType` (`UPSTREAM` or `DOWNSTREAM`) and `asset`: the node in the shape of a `search_assets` row (`type`, `name`, `lineageType`, `tier` and the fields of its kind, such as `project`, `dataset`, `table` or `url`). A field with no value is missing. `info` holds what the Masthead app draws; prefer `asset`.
 * `value.pages.upstream.total` and `value.pages.downstream.total` are the full counts; always report them. Each direction returns the 100 most recently active neighbours. When `nextOffset` is not null and the rest matters, call again with that `direction` and `offset = nextOffset`; otherwise say the list is partial.
 * **No neighbours**: read `code` and `error` before concluding anything. `get_lineage` always returns the node you asked for, so an empty response alone proves nothing.
 
@@ -93,7 +93,7 @@ Reading the response:
 
 * **Pipelines between assets**: lineage shows the pipeline that connects two assets, with its uuid. To learn what it is, call `get_pipeline_context` with that uuid: who runs it, its SQL, whether it runs on schedule (`runs.total` against `runs.expected`), its last error, cost, and open incidents. Use it when the user asks why a table changed or stopped updating, not for every edge. Its `sources`, `destinations` and `consumers` are assets in the `search_assets` shape, so their `uuid` and `lineageType` go straight to `get_lineage`. When a destination table has `isAnonymous: true` the pipeline is an ad-hoc query that writes no permanent table: report it as a one-off query by its principal, not as a table's writer.
 * **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` (and `to`, if you set one) on every hop. Go at most as deep as the question needs, and say how many hops you read.
-* **A node with `info: null`** is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `search_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
+* **A node with `info: null`** (its `asset.type` is `OTHER` and `asset.name` is the uuid) is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `search_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
 
 ### Step 5: Report
 
