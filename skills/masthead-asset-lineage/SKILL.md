@@ -35,6 +35,19 @@ Narrow a fragment search with `types` when the user names the kind of asset, for
 
 Narrow to one BigQuery project with `project` (an id from `list_projects`) when the user names one or a fragment returns too much. For a table, dataset or routine it means "in this project". A BI asset has no project of its own: there it means "reads tables in this project", so say it that way in your answer. URIs and service accounts are left out when `project` is set.
 
+**Listing instead of searching.** Leave `query` out and set filters to list assets by name:
+
+| Question | Call |
+| --- | --- |
+| What does this tenant have? | no `query`, no filters: `values` is empty and `extra.counts` has the number of assets per type |
+| Which datasets are in a project? | `types = ["DATASET"]`, `project` |
+| Which tables are in a dataset? | `types = ["TABLE"]`, `project`, `dataset`; add `tableTypes`, for example `["VIEW"]` |
+| Which Looker Studio reports exist? | `types = ["LOOKER_STUDIO_REPORT"]` |
+| Which dashboards and reports use this table? | `sourceTable = "project.dataset.table"`, `types` set to the BI types |
+| Which assets are on a tier? | `alertTypes = ["CRITICAL", "PRIORITY"]`, with `types` or `project` |
+
+Listing tables needs `project` or `sourceTable`; without one the call is rejected. Every filter also narrows a search with a `query`. Page with `extra.nextOffset` as usual, and report `extra.counts` or the page size rather than paging through thousands of rows.
+
 Looker Studio reports, Looker Studio data sources and Google Sheets have **no title** in Masthead: Masthead never reads the report itself, so their `name` is the id. Find them by URL or id. If the user only knows a report's title, ask for its URL.
 
 ### Step 2: Read the result
@@ -53,6 +66,7 @@ Each row in `values` is an asset, the same shape `get_pipeline_context` uses for
   | `NO_METADATA` | lineage refers to the uuid, but Masthead has no metadata for it | `get_lineage` can still read its neighbours with the uuid; don't invent a name |
 
 * **`score` and `percentile`** (tables and scored BI assets): how much the asset matters, 0 to 100 among the tenant's assets of its type. Missing means the asset has no score. Use it to say which of several matches matters most.
+* **`sourceTables`** (BI assets): the number of tables the asset read in the window, or in the last 30 days when you pass none. Zero or missing with an old `lastLineageAt` means the asset has not been used lately.
 * **`columns` and `isAnomaly`** (tables): the column count, and whether an incident is open on the table now.
 * **An error is not an empty result.** A timeout or a `503` says nothing about the asset: retry once, then report the error.
 * **`sourceProjects`** (BI assets): the projects of the tables the asset reads. Compare it with `list_projects`: a project in the list that is not connected is a source Masthead can't see, so `get_lineage` will show those tables without names, or not at all. Say which projects those are.

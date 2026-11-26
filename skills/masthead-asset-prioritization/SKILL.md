@@ -46,7 +46,7 @@ Take the scope from the user's request: an asset-type scope, a project, a datase
 
 Run every call below **once per in-scope asset type**, with `assetTypes = [<type>]` — percentiles and the 2-page cap apply within that type, because the response's `percentile` is already a rank within the asset's own type.
 
-1. **Raise**: `list_asset_scores` with `assetTypes = [<type>]`, `alertTiers = ["REGULAR"]`, `minPercentile = <p>`, `limit = 200` (plus `project` / `dataset` when scoped, `TABLE` only). Fetch at most the first 2 pages (400 assets per type) — the report is a ranked shortlist, not the whole scope. Rows come back in `values`; note `pagination.total` and tell the user how many more assets of that type sit above the cut.
+1. **Raise**: `list_asset_scores` with `assetTypes = [<type>]`, `alertTiers = ["REGULAR"]`, `minPercentile = <p>`, `limit = 200` (plus `project` / `dataset` when scoped; for a BI type they keep the assets that read a table there in the last 30 days). Fetch at most the first 2 pages (400 assets per type) — the report is a ranked shortlist, not the whole scope. Rows come back in `values`; note `pagination.total` and tell the user how many more assets of that type sit above the cut.
 2. **Lower**: `list_asset_scores` with `assetTypes = [<type>]`, `alertTiers = ["PRIORITY", "CRITICAL"]`, no `minPercentile`, `limit = 200`, at most 2 pages. Keep the rows whose `percentile` is below 50 — prioritized assets that rank in the bottom half of their type.
 3. **Muted**: `list_asset_scores` with `assetTypes = [<type>]`, `alertTiers = ["MUTED"]`, `minPercentile = <p>`, `limit = 200`, one page only. Keep these rows in a separate list; they never get a suggested tier.
 
