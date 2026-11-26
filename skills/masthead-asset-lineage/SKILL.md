@@ -44,9 +44,15 @@ Each row in `values` is an asset, the same shape `get_pipeline_context` uses for
 * **One row**: use it.
 * **Several rows**: results are ordered exact match, then name starting with the query, then name containing it, then a match only in the id or URL. Take an exact match when there is one. Otherwise show the user the top rows (`type`, `name`, `alertType`) and ask which one they mean. Don't pick one silently.
 * **More pages**: `extra.nextOffset` is not null. Narrow the query or `types` before paging; call again with `offset = extra.nextOffset` only when the user needs the full list.
-* **No rows**: Masthead has not seen the asset. Say so, and say why that happens:
-  * a BI asset is known only after a BigQuery job labeled with its id ran in a connected project (`list_projects` shows the connected projects); a report nobody opened recently, or one that reads an unconnected project, is not known;
-  * a table is known only when its project is connected.
+* **No rows**: read `code` and `error`, which say why, and pass the reason on to the user:
+
+  | `code` | Meaning | What to say or do |
+  |---|---|---|
+  | `NOT_FOUND` | nothing matches | a BI asset is known only after a BigQuery job labeled with its id ran in a connected project (`list_projects` shows them); a report nobody opened recently, or one that reads an unconnected project, is not known |
+  | `PROJECT_NOT_CONNECTED` | the query is a table path whose project is not connected, or was disconnected | name the project; Masthead knows no tables in it |
+  | `NO_METADATA` | lineage refers to the uuid, but Masthead has no metadata for it | `get_lineage` can still read its neighbours with the uuid; don't invent a name |
+* **`score` and `percentile`** (tables and scored BI assets): how much the asset matters, 0 to 100 among the tenant's assets of its type. Missing means the asset has no score. Use it to say which of several matches matters most.
+* **`columns` and `isAnomaly`** (tables): the column count, and whether an incident is open on the table now.
 * **An error is not an empty result.** A timeout or a `503` says nothing about the asset: retry once, then report the error.
 * **`sourceProjects`** (BI assets): the projects of the tables the asset reads. Compare it with `list_projects`: a project in the list that is not connected is a source Masthead can't see, so `get_lineage` will show those tables without names, or not at all. Say which projects those are.
 * **`projectConnected` is false** (tables, datasets, routines): the project was disconnected from Masthead. The asset's metadata and lineage are stale; say so.

@@ -129,8 +129,9 @@ Check which upstream dependencies wrote to the table and what downstream tables,
 
 Check columns count, table type, and active anomaly statuses.
 
-* **Tool**: `get_table_metadata`
-* **Key Arguments**: `project`, `dataset`, `table`
+* **Tool**: `search_assets`
+* **Key Arguments**: `query` = the table path `project.dataset.table`, `types = ["TABLE"]`
+* **Result**: the table row has `tableType`, `columns`, `isAnomaly` (an incident is open on it), `alertType`, `score` and `percentile`. When nothing is found, `code` and `error` say why.
 * **Example Prompt**: *"Get metadata for table your-project-id.your_dataset.your_table."*
 
 #### 2. Identify Upstream Writers / Pipelines
