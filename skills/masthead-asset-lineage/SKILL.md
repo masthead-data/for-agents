@@ -47,7 +47,7 @@ Each row in `values` is an asset, the same shape `get_pipeline_context` uses for
 * **No rows**: read `code` and `error`, which say why, and pass the reason on to the user:
 
   | `code` | Meaning | What to say or do |
-  |---|---|---|
+  | --- | --- | --- |
   | `NOT_FOUND` | nothing matches | a BI asset is known only after a BigQuery job labeled with its id ran in a connected project (`list_projects` shows them); a report nobody opened recently, or one that reads an unconnected project, is not known |
   | `PROJECT_NOT_CONNECTED` | the query is a table path whose project is not connected, or was disconnected | name the project; Masthead knows no tables in it |
   | `NO_METADATA` | lineage refers to the uuid, but Masthead has no metadata for it | `get_lineage` can still read its neighbours with the uuid; don't invent a name |
