@@ -39,10 +39,10 @@ Looker Studio reports, Looker Studio data sources and Google Sheets have **no ti
 
 ### Step 2: Read the result
 
-Each row in `values` is an asset, the same shape `get_pipeline_context` uses for sources and destinations. It always has `type`, `uuid` and `name`. Then come the fields of its kind: `project`, `dataset`, `table` and `tableType` for a table; `lookerId`, `title` and `url` for a Looker dashboard or look; `reportId` and `url` for a Looker Studio report; `docId` and `url` for a Google Sheet; `uri` for a URI. Then `lineageType`, `tier`, `lastLineageAt`, `projectConnected`, `sourceProjects`, `deleted` and `hidden`, each only where it applies. A field with no value is left out, so treat a missing field as "none".
+Each row in `values` is an asset, the same shape `get_pipeline_context` uses for sources and destinations. It always has `type`, `uuid` and `name`. Then come the fields of its kind: `project`, `dataset`, `table` and `tableType` for a table; `lookerId`, `title` and `url` for a Looker dashboard or look; `reportId` and `url` for a Looker Studio report; `docId` and `url` for a Google Sheet; `uri` for a URI. Then `lineageType`, `alertType`, `lastLineageAt`, `projectConnected`, `sourceProjects`, `deleted` and `hidden`, each only where it applies. A field with no value is left out, so treat a missing field as "none".
 
 * **One row**: use it.
-* **Several rows**: results are ordered exact match, then name starting with the query, then name containing it, then a match only in the id or URL. Take an exact match when there is one. Otherwise show the user the top rows (`type`, `name`, `tier`) and ask which one they mean. Don't pick one silently.
+* **Several rows**: results are ordered exact match, then name starting with the query, then name containing it, then a match only in the id or URL. Take an exact match when there is one. Otherwise show the user the top rows (`type`, `name`, `alertType`) and ask which one they mean. Don't pick one silently.
 * **More pages**: `extra.nextOffset` is not null. Narrow the query or `types` before paging; call again with `offset = extra.nextOffset` only when the user needs the full list.
 * **No rows**: Masthead has not seen the asset. Say so, and say why that happens:
   * a BI asset is known only after a BigQuery job labeled with its id ran in a connected project (`list_projects` shows the connected projects); a report nobody opened recently, or one that reads an unconnected project, is not known;
@@ -79,7 +79,7 @@ Pass the row's `uuid` as `uuid` and its `lineageType` as `type`. `get_lineage` r
 
 Reading the response:
 
-* Neighbours are in `value.nodes`, each with `uuid`, `nodeType`, `positionType` (`UPSTREAM` or `DOWNSTREAM`) and `info` (name, tier).
+* Neighbours are in `value.nodes`, each with `uuid`, `nodeType`, `positionType` (`UPSTREAM` or `DOWNSTREAM`) and `asset`: the node in the shape of a `search_assets` row (`type`, `name`, `lineageType`, `alertType` and the fields of its kind, such as `project`, `dataset`, `table` or `url`). A field with no value is missing. `info` holds what the Masthead app draws; prefer `asset`.
 * `value.pages.upstream.total` and `value.pages.downstream.total` are the full counts; always report them. Each direction returns the 100 most recently active neighbours. When `nextOffset` is not null and the rest matters, call again with that `direction` and `offset = nextOffset`; otherwise say the list is partial.
 * **No neighbours**: read `code` and `error` before concluding anything. `get_lineage` always returns the node you asked for, so an empty response alone proves nothing.
 
@@ -93,13 +93,13 @@ Reading the response:
 
 * **Pipelines between assets**: lineage shows the pipeline that connects two assets, with its uuid. To learn what it is, call `get_pipeline_context` with that uuid: who runs it, its SQL, whether it runs on schedule (`runs.total` against `runs.expected`), its last error, cost, and open incidents. Use it when the user asks why a table changed or stopped updating, not for every edge. Its `sources`, `destinations` and `consumers` are assets in the `search_assets` shape, so their `uuid` and `lineageType` go straight to `get_lineage`. When a destination table has `isAnonymous: true` the pipeline is an ad-hoc query that writes no permanent table: report it as a one-off query by its principal, not as a table's writer.
 * **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` (and `to`, if you set one) on every hop. Go at most as deep as the question needs, and say how many hops you read.
-* **A node with `info: null`** is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `search_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
+* **A node with `info: null`** (its `asset.type` is `OTHER` and `asset.name` is the uuid) is a table Masthead has lineage for but no metadata: its project is not connected, or it was deleted, or it is not collected yet. Call `search_assets` with its `uuid` once; if that returns nothing, report it as "unnamed table (`uuid`)" with those possible reasons. Don't invent a name.
 
 ### Step 5: Report
 
 * Name each asset the way the user would recognise it: `project.dataset.table` for a table, `name` and `url` for a BI asset (for Looker Studio and Sheets the URL is the name).
 * Give the window you read ("last 7 days", or the `from` you passed) and the totals per direction.
-* State the monitoring `tier` of the assets found when it matters to the question (`CRITICAL` and `PRIORITY` first).
+* State the monitoring tier (`alertType`) of the assets found when it matters to the question (`CRITICAL` and `PRIORITY` first).
 * State only what the tools returned. Masthead lineage is built from observed jobs: no upstream in the window means no job wrote the table in that window, not that the table has no sources.
 
 ## Examples
