@@ -1,6 +1,6 @@
 {
   "name": "masthead-agent-tools",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Investigate BigQuery incidents, trace lineage, and identify data-platform cost savings with Masthead.",
   "author": {
     "name": "Masthead Data",
@@ -69,7 +69,7 @@
             {
               "description": "Trace table lineage",
               "prompt": "Show the upstream and downstream lineage for <reviewer-provided table>.",
-              "tools_triggered": "get_table_lineage",
+              "tools_triggered": "search_assets, get_lineage",
               "expected_behavior": "Returns lineage that the connected user can access and identifies upstream and downstream assets without exposing unavailable data."
             },
             {

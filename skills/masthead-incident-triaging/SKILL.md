@@ -129,8 +129,9 @@ Check which upstream dependencies wrote to the table and what downstream tables,
 
 Check columns count, table type, and active anomaly statuses.
 
-* **Tool**: `get_table_metadata`
-* **Key Arguments**: `project`, `dataset`, `table`
+* **Tool**: `search_assets`
+* **Key Arguments**: `query` = the table path `project.dataset.table`, `types = ["TABLE"]`
+* **Result**: the table row has `tableType`, `columns`, `isAnomaly` (an incident is open on it), `alertType`, `score` and `percentile`. When nothing is found, `code` and `error` say why.
 * **Example Prompt**: *"Get metadata for table your-project-id.your_dataset.your_table."*
 
 #### 2. Identify Upstream Writers / Pipelines
@@ -148,6 +149,7 @@ Read direction carefully: the `pipeline` section and `get_table_pipelines` retur
 
 * **Tool**: `get_incident_context` (`sections` = `pipeline` when you already read the rest). `get_table_pipelines` is for a table with no incident, or when you need a writer's sources and cost.
 * **Key Arguments** of `get_table_pipelines`: `project`, `dataset`, `table`; `from` = about a day before the incident's `createdAt` (the default 30-day window is slow on busy tables)
+* **One pipeline in depth**: `get_pipeline_context` with `pipelineUuid` = a writer's `jobHash` adds what the incident context leaves out: the pipeline's SQL (`fullQuery = true` for all of it), its sources, bytes and slot time per run, cost, the consumers of its table and its other open incidents, what it does to the table (`statementType`: a `MERGE` adds to it, a `CREATE_TABLE_AS_SELECT` rebuilds it), and `jobModel`, the dbt model or Airflow dag and task to open in the repository. Use it for the writer you suspect, not for every writer. It reads the last 7 days by default: pass `from` when the incident is older. A missing section means nothing was found, unless `errors` names it: that part could not be read, so say so and retry it with `sections` instead of reporting "none".
 * **Call Economy**: one `get_incident_context` call per incident; for a group that shares a table or a `pipeline.jobHash`, read one member.
 * **Example Prompt**: *"Which pipelines write to your-project-id.your_dataset.your_table?"*
 
@@ -156,10 +158,10 @@ Read direction carefully: the `pipeline` section and `get_table_pipelines` retur
 Trace downstream tables and pipelines to assess blast radius.
 
 * **Tool**: `get_lineage`. `get_table_lineage` (by `project`, `dataset`, `table`) is legacy: don't use it.
-* **Key Arguments**: `uuid` and `type = "TABLE"`; for blast radius, `direction = "DOWNSTREAM"`. Take `uuid` from `incident.destination.uuid` in `get_incident_context` (`list_incidents` leaves it out), or from `get_table_metadata` for a table the user names. Optional: `nodeTypes` (e.g. `["LOOKER", "LOOKER_STUDIO_REPORT"]` for affected dashboards and reports only), `limit` (default 100, at most 1000), `offset`
+* **Key Arguments**: `uuid` and `type = "TABLE"`; for blast radius, `direction = "DOWNSTREAM"`. Take `uuid` from `incident.destination.uuid` in `get_incident_context` (`list_incidents` leaves it out). For a table the user names, even by part of its name, call `search_assets` and pass the row's `uuid` and `lineageType`. Optional: `nodeTypes` (e.g. `["LOOKER", "LOOKER_STUDIO_REPORT"]` for affected dashboards and reports only), `limit` (default 100, at most 1000), `offset`
 * **Example Prompt**: *"Show the lineage for table your-project-id.your_dataset.another_table to find downstream tables."*
-* **Response Reading**: The tool returns a `ValueResponse`. Look for nodes in the `value.nodes` array where `positionType` is `DOWNSTREAM` and inspect their `info` (e.g., `value.nodes[].info.alertType`). Each direction is paged, most recently active neighbours first: `value.pages.downstream.total` is the full count. Report that count; when `nextOffset` is not null, call again with `offset = nextOffset` only if the remaining neighbours change the assessment, and say when the list you report is partial.
-* **Beyond one hop**: `get_lineage` reads one hop from any node, so pass a neighbour's `uuid` and `nodeType` as `uuid` and `type` to walk on, for example to a downstream table's own consumers. Starting from a dashboard or report (a user names one, or it is a BI asset from `list_asset_scores`), pass its `uuid`, `type` = its `assetType`, `direction = "UPSTREAM"` and `nodeTypes = ["TABLE"]` to find the source tables to check for open incidents.
+* **Response Reading**: The tool returns a `ValueResponse`. Look for nodes in the `value.nodes` array where `positionType` is `DOWNSTREAM` and inspect their `asset` (e.g., the tier in `value.nodes[].asset.alertType`). Each direction is paged, most recently active neighbours first: `value.pages.downstream.total` is the full count. Report that count; when `nextOffset` is not null, call again with `offset = nextOffset` only if the remaining neighbours change the assessment, and say when the list you report is partial.
+* **Beyond one hop**: `get_lineage` reads one hop from any node, so pass a neighbour's `uuid` and `nodeType` as `uuid` and `type` to walk on, for example to a downstream table's own consumers. Starting from a dashboard, report or sheet the user names, call `search_assets` with its URL (the id in the URL is not the Masthead `uuid`), then pass the row's `uuid`, `type` = its `lineageType`, `direction = "UPSTREAM"` and `nodeTypes = ["TABLE"]` to find the source tables to check for open incidents. `get_lineage` reads the last 7 days by default: when the row's `lastLineageAt` is older, pass `from`, a time before it. An empty response carries a `code` and an `error` that say why (wrong uuid, wrong type, no lineage, or lineage outside the window): read them before reporting "no downstream". The `masthead-asset-lineage` skill has the full procedure.
 
 #### 4. Propose a Severity
 
