@@ -1,6 +1,6 @@
 ---
 name: masthead-asset-lineage
-description: Find any asset Masthead knows — a BigQuery table, dataset or routine, a Looker dashboard, look or explore, a Looker Studio report, a Google Sheet, a Power BI report — from a URL, part of a name or an id, then trace its upstream sources and downstream consumers, using the Masthead MCP server tools `search_assets` and `get_lineage`.
+description: Find any asset Masthead knows — a BigQuery table, dataset or routine, a Looker dashboard, look or explore, a Looker Studio report, a Google Sheet, a Power BI report — from a URL, part of a name or an id, then trace its upstream sources and downstream consumers, using the Masthead MCP server tools `search_assets`, `get_lineage` and `get_pipeline_context`.
 compatibility: Requires connection to the Masthead MCP server at `https://mcp.mastheadata.com/mcp`.
 ---
 
@@ -85,7 +85,7 @@ Each row in `values` is an asset, the same shape `get_pipeline_context` uses for
 
 To check a specific period for several assets at once, pass `from` (and `to` if needed) to `search_assets`: the same assets come back, and `lastLineageAt` is then the latest edge inside that window, missing when there is none. Leave them out for the first search, so an asset last active long ago still shows when.
 
-No `lineageType` (datasets, Looker Studio data sources) means the asset is not a lineage node: there is nothing to trace from it. For a dataset, search its tables instead: `search_assets` with `query` = `project.dataset.` and `types = ["TABLE"]`.
+No `lineageType` (datasets, Looker Studio data sources) means the asset is not a lineage node: there is nothing to trace from it. For a dataset, list its tables instead: `search_assets` with `types = ["TABLE"]`, `project` and `dataset`.
 
 ### Step 4: Trace with `get_lineage`
 
@@ -112,7 +112,7 @@ Reading the response:
   | `OUTSIDE_REQUEST` | lineage exists, none in this window or filter | `error` gives the last lineage time: pass `from`, a time before it, or drop `direction` / `nodeTypes` |
   | `NO_METADATA` | lineage refers to the uuid, Masthead has no metadata | lineage exists but none matched this call: pass `from`, a time before the one in `error`, or drop `direction` / `nodeTypes`. The node itself has no name: report it as an unnamed table (project not connected, deleted, or not collected yet) |
 
-* **Pipelines between assets**: lineage shows the pipeline that connects two assets, with its uuid. To learn what it is, call `get_pipeline_context` with `pipelineUuid` = that uuid: who runs it, its SQL, whether it runs on schedule (`runs.total` against `runs.expected`), its last error, cost, and open incidents. Use it when the user asks why a table changed or stopped updating, not for every edge. Its `sources`, `destinations` and `consumers` are assets in the `search_assets` shape, so their `uuid` and `lineageType` go straight to `get_lineage`. When a destination table has `isAnonymous: true` the pipeline is an ad-hoc query that writes no permanent table: report it as a one-off query by its principal, not as a table's writer.
+* **Pipelines between assets**: lineage shows the pipeline that connects two assets, with its uuid. To learn what it is, call `get_pipeline_context` with `pipelineUuid` = that uuid: who runs it, its SQL, whether it runs on schedule (`runs.total` against `runs.expected`), its last error, cost, and open incidents. Use it when the user asks why a table changed or stopped updating, not for every edge. It reads the last 7 days by default, like `get_lineage`: pass the same `from` (and `to`, if you set one) you used there, or `runs.total`, `cost` and `consumers` cover the wrong period. A section that is missing means nothing was found, unless `errors` names it: that part could not be read. Then say so instead of reporting "none" (for example "open incidents could not be read"), and retry `runs`, `tags`, `cost`, `consumers` or `incidents` alone with `sections`. Its `sources`, `destinations` and `consumers` are assets in the `search_assets` shape, so their `uuid` and `lineageType` go straight to `get_lineage`. When a destination table has `isAnonymous: true` the pipeline is an ad-hoc query that writes no permanent table: report it as a one-off query by its principal, not as a table's writer.
 * **Open incidents on the way**: a table or pipeline node whose `asset.isAnomaly` is true has an open incident. Name those nodes first when the question is about impact or a root cause; `list_incidents` has the incidents themselves.
 * **Who queries a BI asset**: call `get_lineage` on the dashboard, report or sheet with `direction = "UPSTREAM"`. Next to the source tables, the response has `PIPELINE` nodes: the BigQuery jobs that ran for the asset. Each one's `asset` has `sourceProject` (the project the jobs run and are billed in), `principalEmail` (the service account or user that ran them) and `pipelineType`. List the distinct projects and principals. `nodeTypes = ["TABLE"]` keeps these pipeline nodes, since it filters the tables, not the pipelines between. This is different from `sourceProjects` in `search_assets`, which names the projects of the tables the asset reads.
 * **Walk further** by passing a neighbour's `uuid` and `nodeType` as `uuid` and `type`. Keep the same `from` (and `to`, if you set one) on every hop. Go at most as deep as the question needs, and say how many hops you read.
@@ -130,7 +130,7 @@ Reading the response:
 **"Which tables feed this dashboard? `https://lookerstudio.google.com/reporting/<id>/page/abc`"**
 
 1. `search_assets(query = "<the URL>")` → one `LOOKER_STUDIO_REPORT` row; note `uuid`, `lineageType`, `lastLineageAt`.
-2. `lastLineageAt` is a month old → `get_lineage(uuid, type = "LOOKER_STUDIO_REPORT", direction = "UPSTREAM", nodeTypes = ["TABLE"], from = <a day before lastLineageAt>, to = <now>)`.
+2. `lastLineageAt` is a month old → `get_lineage(uuid, type = "LOOKER_STUDIO_REPORT", direction = "UPSTREAM", nodeTypes = ["TABLE"], from = <a day before lastLineageAt>)`.
 3. Report the source tables, `value.pages.upstream.total`, and that the report was last active a month ago.
 
 **"What breaks if `orders_daily` is late?"**
@@ -150,3 +150,4 @@ Reading the response:
 
 * [MCP tools reference: `search_assets`](https://docs.mastheadata.com/developer/mcp/tools#search_assets)
 * [MCP tools reference: `get_lineage`](https://docs.mastheadata.com/developer/mcp/tools#get_lineage)
+* [MCP tools reference: `get_pipeline_context`](https://docs.mastheadata.com/developer/mcp/tools#get_pipeline_context)
