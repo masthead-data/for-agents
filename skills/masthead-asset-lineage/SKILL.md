@@ -101,13 +101,13 @@ Pass the row's `uuid` as `uuid` and its `lineageType` as `type`. `get_lineage` r
 Reading the response:
 
 * Neighbours are in `value.nodes`, each with `uuid`, `nodeType`, `positionType` (`UPSTREAM` or `DOWNSTREAM`) and `asset`: the node in the shape of a `search_assets` row (`type`, `name`, `lineageType`, `alertType` and the fields of its kind, such as `project`, `dataset`, `table` or `url`). A field with no value is missing. `info` holds what the Masthead app draws; prefer `asset`.
-* `value.pages.upstream.total` and `value.pages.downstream.total` are the full counts; always report them. Each direction returns the 100 most recently active neighbours. When `nextOffset` is not null and the rest matters, call again with that `direction` and `offset = nextOffset`; otherwise say the list is partial.
+* `value.pages.upstream.total` and `value.pages.downstream.total` are the full counts of neighbours (a table read through several pipelines counts once); always report them. Each direction returns the 100 most recently active neighbours. When `nextOffset` is not null and the rest matters, call again with that `direction` and `offset = nextOffset`; otherwise say the list is partial.
 * **No neighbours**: read `code` and `error` before concluding anything. `get_lineage` always returns the node you asked for, so an empty response alone proves nothing.
 
   | `code` | What it means | What to do |
   | --- | --- | --- |
   | `NOT_FOUND` | no asset has this uuid | you passed an id that is not a Masthead `uuid`: go back to Step 1 |
-  | `WRONG_TYPE` | the uuid is another asset type | call again with the `type` that `error` names |
+  | `WRONG_TYPE` | the uuid is another asset type | call again with the `type` that `error` names. This one code can also come with neighbours: the node you asked for is then unnamed, so still call again |
   | `NO_LINEAGE` | the asset exists, never had lineage | report that; there is nothing to trace |
   | `OUTSIDE_REQUEST` | lineage exists, none in this window or filter | `error` gives the last lineage time: pass `from`, a time before it, or drop `direction` / `nodeTypes` |
   | `NO_METADATA` | lineage refers to the uuid, Masthead has no metadata | lineage exists but none matched this call: pass `from`, a time before the one in `error`, or drop `direction` / `nodeTypes`. The node itself has no name: report it as an unnamed table (project not connected, deleted, or not collected yet) |
